@@ -61,6 +61,12 @@ func clip(s string) string {
 	return s[:i] + "..."
 }
 
+// Fold returns s in the form the collation compares: Equal(a, b) is
+// Fold(a) == Fold(b), and Contains, HasPrefix and HasSuffix are their
+// strings counterparts on folded text. Folding a long text once and
+// comparing it many times saves work.
+func (c Collation) Fold(s string) string { return c.fold(s) }
+
 // Name returns the collation identifier.
 func (c Collation) Name() string { return c.name }
 

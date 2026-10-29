@@ -6,6 +6,7 @@ package collation
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -215,5 +216,26 @@ func TestLengthChangingFold(t *testing.T) {
 	a := mustGet(t, "i;ascii-casemap")
 	if a.HasSuffix("Straße", "SSE") || a.Contains("İstanbul", "i̇s") {
 		t.Error("ascii-casemap matched across a non-ASCII fold")
+	}
+}
+
+// TestFoldAgreesWithComparisons checks that comparing folded text gives
+// the same answers as the comparison methods.
+func TestFoldAgreesWithComparisons(t *testing.T) {
+	pairs := [][2]string{
+		{"Straße", "STRASSE"}, {"ÉCOLE", "école"}, {"Kelvin", "Kelvin"},
+		{"abc", "ABC"}, {"ab", "abc"}, {"", ""}, {"x\xffy", "X\xffY"},
+	}
+	for _, name := range []string{"i;octet", "i;ascii-casemap", "i;unicode-casemap"} {
+		c := mustGet(t, name)
+		for _, p := range pairs {
+			a, b := c.Fold(p[0]), c.Fold(p[1])
+			if got := a == b; got != c.Equal(p[0], p[1]) {
+				t.Errorf("%s: Fold %q == Fold %q is %v, Equal says otherwise", name, p[0], p[1], got)
+			}
+			if got := strings.Contains(a, b); got != c.Contains(p[0], p[1]) {
+				t.Errorf("%s: Contains(%q, %q) disagrees", name, p[0], p[1])
+			}
+		}
 	}
 }

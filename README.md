@@ -20,6 +20,8 @@ Status: early development. Nothing is released and the API will change.
 | `caldav`, `carddav` | Protocol engines that serve a store over HTTP |
 
 [docs/filestore.md](docs/filestore.md) describes the file store's layout, crash recovery and limits.
+[docs/ical.md](docs/ical.md) describes what the iCalendar package accepts, how it reads times and
+time zones, and its limits.
 
 Objects are stored and served as the bytes the client sent. The engines know
 nothing about identity providers or user accounts: they work with owners,
