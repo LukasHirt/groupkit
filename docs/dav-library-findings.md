@@ -8,12 +8,12 @@ SPDX-License-Identifier: Apache-2.0
 
 Results of a spike that wired `github.com/emersion/go-webdav` v0.7.0 (with
 `go-ical` and `go-vcard`) to an in-memory backend and probed it with scripted
-clients. The spike was run for the Grove project. Its goal was to find out how much
-of a CalDAV and CardDAV protocol layer the library can carry.
+clients. Its goal was to find out how much of a CalDAV and CardDAV protocol layer the
+library can carry.
 
 ## Scope and limits
 
-The server under test used the URL layout Grove plans to ship
+The server under test used this URL layout
 (`/dav/principals/{user}/`, `/dav/calendars/{user}/{calendar}/`,
 `/dav/addressbooks/{user}/{book}/`) with HTTP Basic auth. It was probed with
 curl, a Python script and the Python `caldav` client (3.5.0). A second pass
