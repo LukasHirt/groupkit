@@ -81,7 +81,7 @@ func propfindNode(root *Node) (PropfindRequest, error) {
 	case len(all) == 1:
 		req.AllProp = true
 		if inc := root.Child(Include); inc != nil {
-			props, err := propNames(inc.Children)
+			props, err := PropNames(inc.Children)
 			if err != nil {
 				return PropfindRequest{}, err
 			}
@@ -90,7 +90,7 @@ func propfindNode(root *Node) (PropfindRequest, error) {
 	case len(names) == 1:
 		req.PropName = true
 	default:
-		props, err := propNames(prop[0].Children)
+		props, err := PropNames(prop[0].Children)
 		if err != nil {
 			return PropfindRequest{}, err
 		}
@@ -99,8 +99,8 @@ func propfindNode(root *Node) (PropfindRequest, error) {
 	return req, nil
 }
 
-// propNames lists the names of nodes in order, without duplicates.
-func propNames(nodes []*Node) ([]xml.Name, error) {
+// PropNames lists the names of nodes in order, without duplicates.
+func PropNames(nodes []*Node) ([]xml.Name, error) {
 	var out []xml.Name
 	seen := make(map[xml.Name]struct{}, len(nodes))
 	for _, n := range nodes {

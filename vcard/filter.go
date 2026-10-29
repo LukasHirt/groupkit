@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/LukasHirt/groupkit/internal/collation"
 	"github.com/LukasHirt/groupkit/internal/contentline"
+	"strings"
 )
 
 // ErrFilter is wrapped by every error that Filter.Validate returns.
@@ -41,6 +42,40 @@ type TextMatch struct {
 	Collation string
 	MatchType string
 	Negate    bool
+
+	// prep is set by Filter.Validate: the resolved collation and the folded
+	// value. It is only used while it still describes Value and Collation.
+	prep *textPrep
+}
+
+// textPrep is a TextMatch prepared by Validate.
+type textPrep struct {
+	value, collation string // what the preparation was made from
+	col              collation.Collation
+	folded           string
+}
+
+// foldCache holds the folded forms of one text, one per collation, for the
+// duration of one property match.
+type foldCache struct {
+	names []string
+	vals  []string
+}
+
+func (fc *foldCache) fold(col collation.Collation, s string) string {
+	if fc == nil {
+		return col.Fold(s)
+	}
+	name := col.Name()
+	for i, n := range fc.names {
+		if n == name {
+			return fc.vals[i]
+		}
+	}
+	v := col.Fold(s)
+	fc.names = append(fc.names, name)
+	fc.vals = append(fc.vals, v)
+	return v
 }
 
 // ParamFilter selects properties by one of their parameters. Name is
@@ -88,15 +123,15 @@ func (f *Filter) Validate() error {
 	if err := validTest(f.Test); err != nil {
 		return err
 	}
-	for _, pf := range f.Props {
-		if err := pf.validate(); err != nil {
+	for i := range f.Props {
+		if err := f.Props[i].validate(); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (pf PropFilter) validate() error {
+func (pf *PropFilter) validate() error {
 	if pf.Name == "" {
 		return fmt.Errorf("%w: empty property name", ErrFilter)
 	}
@@ -106,20 +141,20 @@ func (pf PropFilter) validate() error {
 	if err := validTest(pf.Test); err != nil {
 		return err
 	}
-	for _, tm := range pf.TextMatches {
-		if err := tm.validate(); err != nil {
+	for i := range pf.TextMatches {
+		if err := pf.TextMatches[i].validate(); err != nil {
 			return err
 		}
 	}
-	for _, p := range pf.Params {
-		if err := p.validate(); err != nil {
+	for i := range pf.Params {
+		if err := pf.Params[i].validate(); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (p ParamFilter) validate() error {
+func (p *ParamFilter) validate() error {
 	if p.Name == "" {
 		return fmt.Errorf("%w: empty parameter name", ErrFilter)
 	}
@@ -140,12 +175,16 @@ func validTest(test string) error {
 	return fmt.Errorf("%w: unknown test %q", ErrFilter, contentline.Clip(test))
 }
 
-func (tm TextMatch) validate() error {
-	if _, err := collation.Get(tm.Collation); err != nil {
+// validate checks the text match and prepares it: the collation is resolved
+// and the value folded once, so matching does not repeat either.
+func (tm *TextMatch) validate() error {
+	col, err := collation.Get(tm.Collation)
+	if err != nil {
 		return fmt.Errorf("%w: %w", ErrFilter, err)
 	}
 	switch tm.MatchType {
 	case "", MatchContains, MatchEquals, MatchStartsWith, MatchEndsWith:
+		tm.prep = &textPrep{value: tm.Value, collation: tm.Collation, col: col, folded: col.Fold(tm.Value)}
 		return nil
 	}
 	return fmt.Errorf("%w: unknown match type %q", ErrFilter, contentline.Clip(tm.MatchType))
@@ -199,8 +238,9 @@ func (pf PropFilter) match(c *Card) bool {
 func (pf PropFilter) matchProperty(p Property) bool {
 	results := make([]bool, 0, len(pf.TextMatches)+len(pf.Params))
 	text := p.Text()
-	for _, tm := range pf.TextMatches {
-		results = append(results, tm.matches(text))
+	var fc foldCache // folds text once per collation for all the text-matches
+	for i := range pf.TextMatches {
+		results = append(results, pf.TextMatches[i].matches(text, &fc))
 	}
 	for _, param := range pf.Params {
 		results = append(results, param.matches(p))
@@ -226,28 +266,37 @@ func (pf ParamFilter) matches(p Property) bool {
 		return true
 	}
 	for _, v := range values {
-		if pf.TextMatch.matches(v) {
+		if pf.TextMatch.matches(v, nil) {
 			return true
 		}
 	}
 	return false
 }
 
-func (tm TextMatch) matches(s string) bool {
-	col, err := collation.Get(tm.Collation)
-	if err != nil {
-		return false
+func (tm *TextMatch) matches(s string, fc *foldCache) bool {
+	var col collation.Collation
+	var needle string
+	if p := tm.prep; p != nil && p.value == tm.Value && p.collation == tm.Collation {
+		col, needle = p.col, p.folded
+	} else {
+		var err error
+		col, err = collation.Get(tm.Collation)
+		if err != nil {
+			return false
+		}
+		needle = col.Fold(tm.Value)
 	}
+	hay := fc.fold(col, s)
 	var ok bool
 	switch tm.MatchType {
 	case "", MatchContains:
-		ok = col.Contains(s, tm.Value)
+		ok = strings.Contains(hay, needle)
 	case MatchEquals:
-		ok = col.Equal(s, tm.Value)
+		ok = hay == needle
 	case MatchStartsWith:
-		ok = col.HasPrefix(s, tm.Value)
+		ok = strings.HasPrefix(hay, needle)
 	case MatchEndsWith:
-		ok = col.HasSuffix(s, tm.Value)
+		ok = strings.HasSuffix(hay, needle)
 	default:
 		return false
 	}

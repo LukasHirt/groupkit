@@ -330,7 +330,7 @@ func TestParsePropfindManyDuplicateNames(t *testing.T) {
 
 func TestPropNamesKeepsFirstOrder(t *testing.T) {
 	a, b, c := N("urn:x", "a"), N("urn:x", "b"), N("urn:y", "a")
-	got, err := propNames([]*Node{{Name: b}, {Name: a}, {Name: b}, {Name: c}, {Name: a}})
+	got, err := PropNames([]*Node{{Name: b}, {Name: a}, {Name: b}, {Name: c}, {Name: a}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -176,7 +176,7 @@ func (s *Store) Changes(ctx context.Context, ref store.CollectionRef, since uint
 
 // object returns the object o describes, with data as its Data.
 func (o *objState) object(name string, data []byte) store.Object {
-	return store.Object{Name: name, Data: data, ETag: o.etag, ModTime: o.mtime, UID: o.uid}
+	return store.Object{Name: name, Data: data, ETag: o.etag, Size: o.size, ModTime: o.mtime, UID: o.uid}
 }
 
 func (c *collection) objectPath(name string) string {

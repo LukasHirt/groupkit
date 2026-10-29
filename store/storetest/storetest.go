@@ -296,6 +296,9 @@ func testObjects(t *testing.T, newStore Factory) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if got.Size != int64(len(got.Data)) {
+			t.Errorf("GetObject Size = %d, want %d", got.Size, len(got.Data))
+		}
 		if string(got.Data) != data {
 			t.Errorf("data = %q, want %q", got.Data, data)
 		}
@@ -393,6 +396,9 @@ func testObjects(t *testing.T, newStore Factory) {
 			}
 			if len(light[i].Data) != 0 || light[i].ETag == "" {
 				t.Errorf("listing without data returned %+v", light[i])
+			}
+			if light[i].Size != 2 || full[i].Size != 2 {
+				t.Errorf("%s: Size is %d and %d, want 2", want, light[i].Size, full[i].Size)
 			}
 			if string(full[i].Data) != strings.Repeat(string(want[0]), 2) {
 				t.Errorf("listing with data returned %q for %s", full[i].Data, want)

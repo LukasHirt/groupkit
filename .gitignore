@@ -10,3 +10,4 @@ go.work.sum
 
 # Local design notes and plans
 docs/superpowers/
+.superpowers/
