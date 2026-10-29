@@ -110,6 +110,16 @@ func foldASCII(s string) string {
 	return string(b)
 }
 
-// foldUnicode applies Unicode case folding. A cases.Caser is not safe for
-// concurrent use, so each call makes its own.
-func foldUnicode(s string) string { return cases.Fold().String(s) }
+// FoldHook, when not nil, is called once per Unicode fold. Tests set it to
+// count folds; it must be set before any concurrent use.
+var FoldHook func()
+
+func foldUnicode(s string) string {
+	if FoldHook != nil {
+		FoldHook()
+	}
+	// A cases.Caser is not safe for concurrent use, so each call makes its
+	// own. Measured: building one allocates nothing, and pooling saves no
+	// allocation, so there is no pool.
+	return cases.Fold().String(s)
+}

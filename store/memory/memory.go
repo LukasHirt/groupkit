@@ -108,7 +108,7 @@ func (c *collection) snapshot(ref store.CollectionRef) store.Collection {
 }
 
 func (o *object) snapshot(name string, withData bool) store.Object {
-	out := store.Object{Name: name, ETag: o.etag, ModTime: o.modTime, UID: o.uid}
+	out := store.Object{Name: name, ETag: o.etag, Size: int64(len(o.data)), ModTime: o.modTime, UID: o.uid}
 	if withData {
 		out.Data = slices.Clone(o.data)
 		if out.Data == nil {

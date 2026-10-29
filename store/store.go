@@ -80,7 +80,11 @@ type Object struct {
 	// without data.
 	Data []byte
 	// ETag identifies the content; see [ETag].
-	ETag    string
+	ETag string
+	// Size is the length of the data in bytes. Every Store implementation
+	// must set it in listings, with or without data, and in GetObject
+	// results; engines rely on it to answer without reading object data.
+	Size    int64
 	ModTime time.Time
 	// UID is the UID the engine reported when the object was written.
 	UID string
