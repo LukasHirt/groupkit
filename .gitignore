@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 groupkit contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+/bin/
+*.out
+coverage.txt
+go.work
+go.work.sum
