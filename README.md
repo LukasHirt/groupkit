@@ -19,6 +19,8 @@ Status: early development. Nothing is released and the API will change.
 | `ical`, `vcard` | Parsing, validation and query matching, including recurrence and time zones |
 | `caldav`, `carddav` | Protocol engines that serve a store over HTTP |
 
+[docs/filestore.md](docs/filestore.md) describes the file store's layout, crash recovery and limits.
+
 Objects are stored and served as the bytes the client sent. The engines know
 nothing about identity providers or user accounts: they work with owners,
 collections and objects, and the program embedding them decides who may see
