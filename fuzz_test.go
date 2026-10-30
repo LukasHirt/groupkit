@@ -24,6 +24,7 @@ func FuzzServer(f *testing.F) {
 	for _, tc := range [][2]string{
 		{"MKCOL", "/dav/addressbooks/alice/b/"},
 		{"PUT", "/dav/addressbooks/alice/b/a.vcf"},
+		{"MKCALENDAR", "/dav/calendars/alice/c/"},
 	} {
 		body := ""
 		if tc[0] == "PUT" {
@@ -38,6 +39,8 @@ func FuzzServer(f *testing.F) {
 	f.Add("PROPFIND", "/dav/principals/alice/", "")
 	f.Add("PROPFIND", "/dav/addressbooks/alice/b/", propfindBody)
 	f.Add("REPORT", "/dav/addressbooks/alice/b/", `<D:sync-collection xmlns:D="DAV:"><D:sync-token/><D:sync-level>1</D:sync-level><D:prop><D:getetag/></D:prop></D:sync-collection>`)
+	f.Add("PROPFIND", "/dav/calendars/alice/c/", propfindBody)
+	f.Add("REPORT", "/dav/calendars/alice/c/", `<D:sync-collection xmlns:D="DAV:"><D:sync-token/><D:sync-level>1</D:sync-level><D:prop><D:getetag/></D:prop></D:sync-collection>`)
 	f.Add("OPTIONS", "*", "")
 	f.Add("GET", "/dav/addressbooks/alice/b/a.vcf", "")
 	f.Add("PUT", "/dav/addressbooks/alice/b/%e4.vcf", "BEGIN:VCARD")

@@ -15,3 +15,7 @@ func ComplianceHeader(extra ...string) string {
 // CardDAVClasses returns the classes the CardDAV handler adds to the DAV
 // header.
 func CardDAVClasses() []string { return []string{"addressbook", "extended-mkcol"} }
+
+// CalDAVClasses returns the classes the CalDAV handler adds to the DAV
+// header.
+func CalDAVClasses() []string { return []string{"calendar-access", "extended-mkcol"} }

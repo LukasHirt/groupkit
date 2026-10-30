@@ -142,8 +142,14 @@ window, sorted by start.
   More is an error. An RDATE PERIOD counts as its start.
 - At most 10,000 occurrences are examined. Past that, the result is cut
   short without an error.
-- A window is at most 100 years long, counted from its start, back from its
-  end when the start is open, and from DTSTART when both sides are open.
+- A recurring master is expanded over at most 100 years: from the later of
+  the window's start and its DTSTART, and not past the window's end. An open
+  start begins at DTSTART and an open end stops 100 years after the
+  expansion start. A window longer than 100 years therefore finds a series
+  only within those 100 years, but single events and overrides anywhere in
+  the window are found, since overlap is tested against the window as
+  given.
+- A zero `time.Time` bound is open, so year 1 itself cannot be asked for.
 - An occurrence overlaps when it starts before the window's end and ends
   after its start. An occurrence without duration overlaps when it starts
   at or after the window's start and before its end.
@@ -159,6 +165,19 @@ window, sorted by start.
   STATUS:CANCELLED are returned, and the caller decides what to do with
   them.
 
+`Occurrences` lists every occurrence in the window, up to the caps above.
+`Matches` only asks whether there is one, and stops at the first: it tests
+the overrides, then DTSTART and the RDATEs, then walks the rule only to its
+first instance that overlaps the window and is neither an EXDATE nor
+replaced by an override. A time range with an open start on a long series
+therefore costs a few instances, not thousands. The answer is the one a
+non-empty `Occurrences` result gives, including the broken-recurrence rule
+below and the 10,000 cap: instances the walk skips as excluded or replaced
+count against it, so a series with 10,000 skipped instances in the window
+matches nothing in either. The one difference is the step limit of the rule
+library: `Matches` fails only if the walk exceeds it before the first hit,
+while `Occurrences` fails if its longer walk exceeds it.
+
 A recurrence that cannot be expanded is an `ErrRecurrence` from
 `Occurrences`. In `Matches` it has no occurrences and makes no time range
 match.
@@ -172,7 +191,8 @@ A filter may nest comp-filters at most 16 deep, have at most 1,000 comp-,
 prop- and param-filters together, and at most 16 comp-filter time ranges.
 
 A comp-filter time range applies only to VEVENTs at the top level of the
-object. It tests the recurrence set of the whole object, overrides
+object. It stops at the first occurrence that overlaps (see Recurrence).
+It tests the recurrence set of the whole object, overrides
 included, so with a master and overrides the filter's properties may be
 satisfied by a different VEVENT than the occurrence in the range. A range
 with both sides open matches every VEVENT. A time range on a VTODO, a VALARM

@@ -6,6 +6,7 @@ package carddav
 
 import (
 	"encoding/xml"
+	"errors"
 	"net/http"
 	"slices"
 	"strings"
@@ -50,6 +51,25 @@ func settable(name xml.Name) bool {
 	return name == dav.DisplayName || name == dav.AddressbookDescription
 }
 
+// protectedOnCreate lists the CardDAV and CalendarServer properties that the
+// server computes.
+var protectedOnCreate = map[xml.Name]bool{
+	dav.GetCTag: true,
+	dav.N(dav.NSCardDAV, "supported-address-data"):    true,
+	dav.N(dav.NSCardDAV, "max-resource-size"):         true,
+	dav.N(dav.NSCardDAV, "supported-collation-set"):   true,
+	dav.N(dav.NSCardDAV, "addressbook-home-set"):      true,
+	dav.N(dav.NSCardDAV, "supported-address-data-v4"): true,
+}
+
+// refusedOnCreate reports whether a property that the engine does not handle
+// fails the creation: a DAV: property (live or protected) or a computed
+// CardDAV one. Any other property is skipped, as clients send extras with a
+// new collection.
+func refusedOnCreate(name xml.Name) bool {
+	return name.Space == dav.NSDAV || protectedOnCreate[name]
+}
+
 // mkcol creates an address book. The body is optional; an extended body may
 // set the display name and description.
 func (h *Handler) mkcol(w http.ResponseWriter, r *http.Request, t target, owner string) {
@@ -82,8 +102,11 @@ func (h *Handler) mkcol(w http.ResponseWriter, r *http.Request, t target, owner 
 				props.Description = v
 			}
 		default:
-			dav.WriteError(w, dav.Forbidden(dav.CannotModifyProtectedProperty))
-			return
+			if refusedOnCreate(p.Name) {
+				dav.WriteError(w, dav.Forbidden(dav.CannotModifyProtectedProperty))
+				return
+			}
+			// Other properties are skipped.
 		}
 	}
 	if hasType {
@@ -101,8 +124,10 @@ func (h *Handler) mkcol(w http.ResponseWriter, r *http.Request, t target, owner 
 
 	_, err = h.store.CreateCollection(r.Context(), h.bookRef(owner, t.book), props)
 	if err != nil {
-		// MKCOL on something that exists: advertise what it does allow.
-		w.Header().Set("Allow", strings.Join(slices.DeleteFunc(allowed(t.kind), func(m string) bool { return m == "MKCOL" }), ", "))
+		if errors.Is(err, store.ErrExists) {
+			// MKCOL on something that exists: advertise what it does allow.
+			w.Header().Set("Allow", strings.Join(slices.DeleteFunc(allowed(t.kind), func(m string) bool { return m == "MKCOL" }), ", "))
+		}
 		h.fail(w, r, t, err)
 		return
 	}

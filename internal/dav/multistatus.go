@@ -202,9 +202,15 @@ const maxReportedErrors = 10
 // is written and the others still go out; the error returned joins the
 // first ten such problems and a count of the rest. A Prop.Write that does not
 // balance its elements records a sticky Writer error instead: the body stops
-// there, is closed to stay well-formed and the error is returned. syncToken, when not empty, is written
-// last as DAV:sync-token.
+// there, is closed to stay well-formed and the error is returned.
+// syncToken, when not empty, is written last as DAV:sync-token.
 func WriteMultiStatus(w http.ResponseWriter, responses iter.Seq[Response], syncToken string) error {
+	return writeMultiStatus(w, responses, func() string { return syncToken })
+}
+
+// writeMultiStatus is WriteMultiStatus with the token chosen after the
+// responses have been written, so it can depend on how the stream ended.
+func writeMultiStatus(w http.ResponseWriter, responses iter.Seq[Response], syncToken func() string) error {
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	xw := NewWriter(w)
@@ -232,9 +238,9 @@ func WriteMultiStatus(w http.ResponseWriter, responses iter.Seq[Response], syncT
 	if skipped > 0 {
 		invalid = append(invalid, fmt.Errorf("dav: %d more invalid responses", skipped))
 	}
-	if syncToken != "" {
+	if tok := syncToken(); tok != "" {
 		xw.Start(SyncToken)
-		xw.Text(syncToken)
+		xw.Text(tok)
 		xw.End()
 	}
 	xw.End()

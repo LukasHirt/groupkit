@@ -122,9 +122,11 @@ func TestMkcolRejected(t *testing.T) {
 		{"collection only", `<D:resourcetype><D:collection/></D:resourcetype>`, "valid-resourcetype"},
 		{"empty type", `<D:resourcetype/>`, "valid-resourcetype"},
 		{"addressbook and calendar", `<D:resourcetype><C:addressbook/><L:calendar/></D:resourcetype>`, "valid-resourcetype"},
-		{"unknown property", `<X:thing xmlns:X="urn:x">1</X:thing>`, "cannot-modify-protected-property"},
+		{"unknown DAV property", `<D:thing>1</D:thing>`, "cannot-modify-protected-property"},
 		{"protected property", `<D:getetag>"x"</D:getetag>`, "cannot-modify-protected-property"},
-		{"valid beside unknown", `<D:displayname>A</D:displayname><X:thing xmlns:X="urn:x"/>`, "cannot-modify-protected-property"},
+		{"getctag", `<CS:getctag xmlns:CS="http://calendarserver.org/ns/">1</CS:getctag>`, "cannot-modify-protected-property"},
+		{"max-resource-size", `<C:max-resource-size>1</C:max-resource-size>`, "cannot-modify-protected-property"},
+		{"valid beside protected", `<D:displayname>A</D:displayname><D:getetag>"x"</D:getetag>`, "cannot-modify-protected-property"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -138,6 +140,25 @@ func TestMkcolRejected(t *testing.T) {
 			})
 		})
 	}
+}
+
+// Properties the engine does not handle, outside DAV:, are skipped when an
+// address book is created.
+func TestMkcolSkipsForeignProperties(t *testing.T) {
+	eachStore(t, func(t *testing.T, st store.Store) {
+		f := emptyFixture(t, st)
+		body := mkcolBody(`<D:resourcetype><D:collection/><C:addressbook/></D:resourcetype>` +
+			`<X:thing xmlns:X="urn:x">1</X:thing><L:schedule-calendar-transp xmlns:L="urn:ietf:params:xml:ns:caldav"/>` +
+			`<D:displayname>Kept</D:displayname><C:addressbook-description>Desc</C:addressbook-description>`)
+		wantStatus(t, f.doPath("MKCOL", newURL, body, nil), http.StatusCreated)
+		c, err := f.getBook(t, newRef)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.Props.DisplayName != "Kept" || c.Props.Description != "Desc" {
+			t.Errorf("props = %+v", c.Props)
+		}
+	})
 }
 
 func TestMkcolBadRequests(t *testing.T) {
@@ -438,5 +459,39 @@ func TestCtagChangesMonotonic(t *testing.T) {
 	y, _ := strconv.ParseUint(b, 10, 64)
 	if y <= x {
 		t.Errorf("ctag %s -> %s", a, b)
+	}
+}
+
+type createErrStore struct {
+	store.Store
+	err error
+}
+
+func (c createErrStore) CreateCollection(context.Context, store.CollectionRef, store.Props) (store.Collection, error) {
+	return store.Collection{}, c.err
+}
+
+// Allow is advertised for an existing name only, not for other failures.
+func TestMkcolAllowOnlyForExistingName(t *testing.T) {
+	for name, tt := range map[string]struct {
+		err  error
+		code int
+	}{
+		"fault":        {errSecret, http.StatusInternalServerError},
+		"invalid name": {store.ErrInvalidName, http.StatusBadRequest},
+		"exists":       {store.ErrExists, http.StatusMethodNotAllowed},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := emptyFixture(t, createErrStore{Store: memory.New(), err: tt.err})
+			rec := f.doPath("MKCOL", newURL, nil, nil)
+			wantStatus(t, rec, tt.code)
+			a := rec.Header().Get("Allow")
+			if tt.err == store.ErrExists && (a == "" || strings.Contains(a, "MKCOL")) {
+				t.Errorf("Allow = %q, want the methods of an address book", a)
+			}
+			if tt.err != store.ErrExists && a != "" {
+				t.Errorf("Allow = %q on a failure that is not a clash", a)
+			}
+		})
 	}
 }

@@ -779,14 +779,14 @@ func TestOccurrencesYearOne(t *testing.T) {
 	}
 }
 
-func TestOccurrencesOpenStartCountsBackFromEnd(t *testing.T) {
+func TestOccurrencesOpenStartBeginsAtDTSTART(t *testing.T) {
 	cal := mustCal(t, vevent("DTSTART:19000101T000000Z", "RRULE:FREQ=YEARLY"))
 	got, err := cal.Occurrences(nil, nil, Range{End: at(2026, 1, 1, 0, 0)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 100 || !got[0].Start.Equal(at(1926, 1, 1, 0, 0)) || !got[99].Start.Equal(at(2025, 1, 1, 0, 0)) {
-		t.Fatalf("got %d occurrences%s ..., want 1926 to 2025", len(got), fmtOccs(got[:min(len(got), 2)]))
+	if len(got) != 100 || !got[0].Start.Equal(at(1900, 1, 1, 0, 0)) || !got[99].Start.Equal(at(1999, 1, 1, 0, 0)) {
+		t.Fatalf("got %d occurrences%s ..., want 1900 to 1999", len(got), fmtOccs(got[:min(len(got), 2)]))
 	}
 }
 
@@ -875,5 +875,65 @@ func TestOccurrencesLargeFallBack(t *testing.T) {
 				t.Errorf("event %d window %d: got%s\nwant%s", i, j, fmtOccs(got), fmtOccs(want))
 			}
 		}
+	}
+}
+
+// TestWideWindows checks that a window longer than 100 years is expanded
+// for 100 years from the first instant that can match, and that
+// non-recurring events and overrides anywhere inside it are found.
+func TestWideWindows(t *testing.T) {
+	win := Range{Start: at(1900, 1, 1, 0, 0), End: at(2100, 1, 1, 0, 0)}
+	tests := []struct {
+		name   string
+		events []string
+		win    Range
+		want   int // number of occurrences; -1 means at least one
+	}{
+		{"single event", []string{vevent("DTSTART:20260310T090000Z", "DTEND:20260310T100000Z")}, win, 1},
+		{"weekly from 2026", []string{vevent("DTSTART:20260310T090000Z", "DTEND:20260310T100000Z", "RRULE:FREQ=WEEKLY;COUNT=5")}, win, 5},
+		{"daily from 2026", []string{vevent("DTSTART:20260310T090000Z", "DTEND:20260310T100000Z", "RRULE:FREQ=DAILY;COUNT=7")}, win, 7},
+		{"override", []string{
+			vevent("DTSTART:20260310T090000Z", "DTEND:20260310T100000Z", "RRULE:FREQ=WEEKLY;COUNT=3"),
+			vevent("RECURRENCE-ID:20260317T090000Z", "DTSTART:20260318T090000Z", "DTEND:20260318T100000Z"),
+		}, win, 3},
+		{"UNTIL'd old series", []string{vevent("DTSTART:19500101T090000Z", "DTEND:19500101T100000Z", "RRULE:FREQ=DAILY;UNTIL=19500110T090000Z")}, win, 10},
+		{"series from 1950 matches", []string{vevent("DTSTART:19500101T090000Z", "DTEND:19500101T100000Z", "RRULE:FREQ=DAILY")}, win, -1},
+		{"150 years, series ended 1980", []string{vevent("DTSTART:19600101T090000Z", "DTEND:19600101T100000Z", "RRULE:FREQ=DAILY;UNTIL=19800101T090000Z")},
+			Range{Start: at(1900, 1, 1, 0, 0), End: at(2050, 1, 1, 0, 0)}, 7306},
+		{"start only", []string{vevent("DTSTART:20260310T090000Z", "DTEND:20260310T100000Z")}, Range{Start: at(1900, 1, 1, 0, 0)}, 1},
+		{"end only", []string{vevent("DTSTART:20260310T090000Z", "DTEND:20260310T100000Z")}, Range{End: at(2100, 1, 1, 0, 0)}, 1},
+		{"both open", []string{vevent("DTSTART:20260310T090000Z", "DTEND:20260310T100000Z")}, Range{}, 1},
+		{"event before the window", []string{vevent("DTSTART:18500310T090000Z", "DTEND:18500310T100000Z")}, win, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := mustCal(t, tt.events...).Occurrences(nil, nil, tt.win)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.want == -1 && len(got) == 0 || tt.want >= 0 && len(got) != tt.want {
+				t.Errorf("got %d occurrences, want %d", len(got), tt.want)
+			}
+		})
+	}
+}
+
+// TestWideWindowExpandsHundredYears pins the expansion range: 100 years
+// from the later of the window start and DTSTART.
+func TestWideWindowExpandsHundredYears(t *testing.T) {
+	cal := mustCal(t, vevent("DTSTART:19500101T090000Z", "DTEND:19500101T100000Z", "RRULE:FREQ=YEARLY"))
+	got, err := cal.Occurrences(nil, nil, Range{Start: at(1900, 1, 1, 0, 0), End: at(2300, 1, 1, 0, 0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 100 || !got[0].Start.Equal(at(1950, 1, 1, 9, 0)) || !got[99].Start.Equal(at(2049, 1, 1, 9, 0)) {
+		t.Fatalf("got %d, first %v, last %v", len(got), got[0].Start, got[len(got)-1].Start)
+	}
+	got, err = cal.Occurrences(nil, nil, Range{Start: at(1960, 1, 1, 0, 0), End: at(2300, 1, 1, 0, 0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 100 || !got[0].Start.Equal(at(1960, 1, 1, 9, 0)) {
+		t.Fatalf("from 1960: got %d, first %v", len(got), got[0].Start)
 	}
 }

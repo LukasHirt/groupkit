@@ -157,15 +157,16 @@ func (h *Handler) query(w http.ResponseWriter, r *http.Request, t target, owner 
 				return dav.Response{}, false
 			}
 			o, data = full, full.Data
-			if flt != nil {
-				card, err := vcard.Parse(data)
-				if err != nil {
-					h.log.Warn("skipping unparsable object", "collection", t.book, "object", o.Name, "error", errKind(err))
-					return dav.Response{}, false
-				}
-				if !flt.Match(card) {
-					return dav.Response{}, false
-				}
+			// Data that is read is parsed even when no filter applies:
+			// clients that parse every address-data they get would fail
+			// on an object that is no card.
+			card, err := vcard.Parse(data)
+			if err != nil {
+				h.log.Warn("skipping unparsable object", "collection", t.book, "object", o.Name, "error", errKind(err))
+				return dav.Response{}, false
+			}
+			if flt != nil && !flt.Match(card) {
+				return dav.Response{}, false
 			}
 		}
 		res := h.objectResource(t.user, t.book, o, func() ([]byte, error) { return data, nil })

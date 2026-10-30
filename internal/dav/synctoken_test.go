@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package carddav
+package dav
 
 import (
 	"math"
@@ -16,14 +16,14 @@ import (
 func TestSyncTokenRoundTrip(t *testing.T) {
 	for _, id := range []string{"abc", "a:b:c", "uuid-1234", "ü ö", ":"} {
 		for _, rev := range []uint64{0, 1, 42, math.MaxUint64} {
-			tok := syncToken(store.Collection{ID: id, Revision: rev})
+			tok := FormatSyncToken(store.Collection{ID: id, Revision: rev})
 			want := "urn:groupkit:sync:" + id + ":" + strconv.FormatUint(rev, 10)
 			if tok != want {
 				t.Fatalf("syncToken = %q, want %q", tok, want)
 			}
-			gotID, gotRev, err := parseSyncToken(tok)
+			gotID, gotRev, err := ParseSyncToken(tok)
 			if err != nil || gotID != id || gotRev != rev {
-				t.Errorf("parseSyncToken(%q) = %q, %d, %v", tok, gotID, gotRev, err)
+				t.Errorf("ParseSyncToken(%q) = %q, %d, %v", tok, gotID, gotRev, err)
 			}
 		}
 	}
@@ -48,8 +48,8 @@ func TestParseSyncTokenRejects(t *testing.T) {
 	}
 	for name, tok := range tests {
 		t.Run(name, func(t *testing.T) {
-			if id, rev, err := parseSyncToken(tok); err == nil {
-				t.Errorf("parseSyncToken(%q) = %q, %d, nil; want an error", tok, id, rev)
+			if id, rev, err := ParseSyncToken(tok); err == nil {
+				t.Errorf("ParseSyncToken(%q) = %q, %d, nil; want an error", tok, id, rev)
 			}
 		})
 	}

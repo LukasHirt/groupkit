@@ -116,13 +116,6 @@ func isAllowed(k targetKind, method string) bool {
 	return false
 }
 
-// request is what the method handlers work on: the parsed target and the
-// store owner Resolve chose for it.
-type request struct {
-	target
-	owner string
-}
-
 // davHeader is the DAV compliance header.
 var davHeader = dav.ComplianceHeader(dav.CardDAVClasses()...)
 
@@ -156,29 +149,27 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w, t.kind)
 		return
 	}
-	req := request{target: t, owner: owner}
-
 	switch r.Method {
 	case http.MethodOptions:
-		h.options(w, req.target)
+		h.options(w, t)
 	case "PROPFIND":
-		h.propfind(w, r, req.target, req.owner)
+		h.propfind(w, r, t, owner)
 	case http.MethodGet, http.MethodHead:
-		h.getObject(w, r, req.target, req.owner)
+		h.getObject(w, r, t, owner)
 	case http.MethodPut:
-		h.putObject(w, r, req.target, req.owner)
+		h.putObject(w, r, t, owner)
 	case "MKCOL":
-		h.mkcol(w, r, req.target, req.owner)
+		h.mkcol(w, r, t, owner)
 	case "PROPPATCH":
-		h.proppatch(w, r, req.target, req.owner)
+		h.proppatch(w, r, t, owner)
 	case "REPORT":
-		h.report(w, r, req.target, req.owner)
+		h.report(w, r, t, owner)
 	case http.MethodDelete:
 		if t.kind == kindCollection {
-			h.deleteCollection(w, r, req.target, req.owner)
+			h.deleteCollection(w, r, t, owner)
 			return
 		}
-		h.deleteObject(w, r, req.target, req.owner)
+		h.deleteObject(w, r, t, owner)
 	default:
 		// Valid for the kind but not implemented yet.
 		methodNotAllowed(w, t.kind)

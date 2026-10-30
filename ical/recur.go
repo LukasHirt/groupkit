@@ -82,10 +82,12 @@ type Occurrence struct {
 //
 // An occurrence overlaps when it starts before win.End and ends after
 // win.Start; one without duration overlaps when it starts at or after
-// win.Start and before win.End. A window is at most 100 years long: from
-// its start, back from its end when only the start is open, and from the
-// event's DTSTART when both are open. A longer window, or an open side, is
-// cut to that.
+// win.Start and before win.End. A zero Start or End leaves that side open.
+// A recurring event is expanded over at most 100 years, from the later of
+// win.Start and its DTSTART, and not past win.End. A window that is wider,
+// or open, therefore finds a series only within those 100 years, while
+// single events and overrides anywhere in the window are found. A bound at
+// the zero time.Time cannot be told from an open side.
 //
 // At most 10,000 occurrences are examined; past that the result is cut
 // short without an error, so a window with more occurrences than that
@@ -154,36 +156,32 @@ func (c *Calendar) Occurrences(res *Resolver, floating *time.Location, win Range
 		}
 	}
 
-	var anchor time.Time
 	var occs []Occurrence
 	if master != nil {
 		var err error
-		if occs, anchor, err = x.master(master, win, replaced); err != nil {
+		if occs, err = x.master(master, win, replaced); err != nil {
 			return nil, err
 		}
 	}
-	lo, hi := clampWindow(win, anchor, master != nil)
-	out = slices.DeleteFunc(out, func(o Occurrence) bool { return !overlaps(o, lo, hi) })
+	out = slices.DeleteFunc(out, func(o Occurrence) bool { return !overlaps(o, win.Start, win.End) })
 	out = append(out, occs...)
 	slices.SortStableFunc(out, func(a, b Occurrence) int { return a.Start.Compare(b.Start) })
 	return out, nil
 }
 
-// clampWindow returns the window to filter with, at most maxWindowYears
-// long: forward from its start, back from its end when only the start is
-// open, and forward from anchor, when there is one, when both are open.
-// A bound left zero stays open.
-func clampWindow(win Range, anchor time.Time, hasAnchor bool) (lo, hi time.Time) {
-	lo, hi = win.Start, win.End
-	switch {
-	case !lo.IsZero():
-		if limit := lo.AddDate(maxWindowYears, 0, 0); hi.IsZero() || hi.After(limit) {
-			hi = limit
-		}
-	case !hi.IsZero():
-		lo = hi.AddDate(-maxWindowYears, 0, 0)
-	case hasAnchor:
-		hi = anchor.AddDate(maxWindowYears, 0, 0)
+// expansionRange returns the range a recurring master is expanded over: at
+// most maxWindowYears from a, the later of the window's start and the
+// master's DTSTART, and never past the window's end. A window that starts
+// before DTSTART, or leaves its start open, begins at DTSTART; one that
+// leaves its end open ends at a plus maxWindowYears.
+func expansionRange(win Range, dtstart time.Time) (lo, hi time.Time) {
+	lo = dtstart
+	if win.Start.After(lo) {
+		lo = win.Start
+	}
+	hi = lo.AddDate(maxWindowYears, 0, 0)
+	if !win.End.IsZero() && win.End.Before(hi) {
+		hi = win.End
 	}
 	return lo, hi
 }
@@ -204,6 +202,62 @@ func overlaps(o Occurrence, lo, hi time.Time) bool {
 type expansion struct {
 	res      *Resolver
 	floating *time.Location
+	// first stops the expansion of the master at its first occurrence that
+	// counts, for callers that only ask whether there is one.
+	first bool
+}
+
+// occursIn reports whether any occurrence of the calendar's VEVENT overlaps
+// win. It follows the rules of Occurrences but stops at the first
+// occurrence that does, so the cost of a hit does not depend on how many
+// occurrences the window holds: overrides are tested first, then DTSTART
+// and the RDATEs, then the rule is walked only up to its first instance
+// that overlaps the window and is neither excluded nor replaced.
+func (c *Calendar) occursIn(res *Resolver, floating *time.Location, win Range) (bool, error) {
+	if res == nil {
+		res = NewResolver(c)
+	}
+	x := expansion{res: res, floating: floating, first: true}
+	var master *Component
+	var overrides []*Component
+	for _, ev := range c.Comps("VEVENT") {
+		if ev.Prop("RECURRENCE-ID") != nil {
+			overrides = append(overrides, ev)
+		} else if master == nil {
+			master = ev
+		}
+	}
+	// A master that cannot be read makes the whole recurrence unexpandable,
+	// whatever its overrides say, so it is read before they are tried.
+	var set masterSet
+	if master != nil {
+		var err error
+		if set, err = x.readMaster(master); err != nil {
+			return false, err
+		}
+	}
+	replaced := map[int64]bool{}
+	hit := false
+	for _, ev := range overrides {
+		if len(replaced) == maxOccurrences {
+			break
+		}
+		o, err := x.override(ev)
+		if err != nil {
+			return false, err
+		}
+		// A second override of the same instance is ignored, as in
+		// Occurrences: it neither replaces nor matches.
+		if key := o.RecurrenceID.Unix(); !replaced[key] {
+			replaced[key] = true
+			hit = hit || overlaps(o, win.Start, win.End)
+		}
+	}
+	if hit || master == nil {
+		return hit, nil
+	}
+	occs, err := x.expandMaster(set, win, replaced)
+	return len(occs) > 0, err
 }
 
 func (x expansion) instant(v Value) time.Time {
@@ -279,44 +333,81 @@ func (x expansion) override(c *Component) (Occurrence, error) {
 	return Occurrence{Start: s, End: x.end(l, start, s), RecurrenceID: x.instant(rid), Override: true}, nil
 }
 
-// master expands the master component and returns its occurrences that
-// overlap win, leaving out those in replaced, and its DTSTART instant.
-func (x expansion) master(c *Component, win Range, replaced map[int64]bool) ([]Occurrence, time.Time, error) {
+// masterSet is a master component read and checked, ready to be expanded.
+type masterSet struct {
+	start    Value
+	length   length
+	rule     *rrule.ROption
+	rdates   []Value
+	excluded map[int64]bool
+}
+
+// readMaster reads DTSTART, the length, the first RRULE, the RDATEs and the
+// EXDATEs of the master, and fails on any that is not valid.
+func (x expansion) readMaster(c *Component) (masterSet, error) {
 	p := c.Prop("DTSTART")
 	if p == nil {
-		return nil, time.Time{}, recurErr("VEVENT without DTSTART")
+		return masterSet{}, recurErr("VEVENT without DTSTART")
 	}
 	start, err := ParseDateTime(p.Value, p.Params)
 	if err != nil {
-		return nil, time.Time{}, recurErr("DTSTART: %w", err)
+		return masterSet{}, recurErr("DTSTART: %w", err)
 	}
 	l, err := x.length(c, start)
 	if err != nil {
-		return nil, time.Time{}, err
+		return masterSet{}, err
 	}
 	var rule *rrule.ROption
 	if rules := c.PropAll("RRULE"); len(rules) > 0 {
 		// RFC 5545 deprecates more than one RRULE; only the first is used.
 		if rule, err = x.parseRule(rules[0].Value, start); err != nil {
-			return nil, time.Time{}, err
+			return masterSet{}, err
 		}
 	}
 	rdates, err := dateList(c, "RDATE", maxRDates)
 	if err != nil {
-		return nil, time.Time{}, err
+		return masterSet{}, err
 	}
 	exVals, err := dateList(c, "EXDATE", maxExDates)
 	if err != nil {
-		return nil, time.Time{}, err
+		return masterSet{}, err
 	}
 	excluded := make(map[int64]bool, len(exVals))
 	for _, v := range exVals {
 		excluded[x.instant(v).Unix()] = true
 	}
+	return masterSet{start: start, length: l, rule: rule, rdates: rdates, excluded: excluded}, nil
+}
 
+// master expands the master component and returns its occurrences that
+// overlap win, leaving out those in replaced.
+func (x expansion) master(c *Component, win Range, replaced map[int64]bool) ([]Occurrence, error) {
+	set, err := x.readMaster(c)
+	if err != nil {
+		return nil, err
+	}
+	return x.expandMaster(set, win, replaced)
+}
+
+func (x expansion) expandMaster(set masterSet, win Range, replaced map[int64]bool) ([]Occurrence, error) {
+	start, l, rule, rdates, excluded := set.start, set.length, set.rule, set.rdates, set.excluded
 	anchor := x.instant(start)
-	lo, hi := clampWindow(win, anchor, true)
+	lo, hi := expansionRange(win, anchor)
 	cands := append([]Value{start}, rdates...)
+	if x.first {
+		// DTSTART or an RDATE inside the window settles it without
+		// touching the rule.
+		for _, v := range cands {
+			s := x.instant(v)
+			if key := s.Unix(); excluded[key] || replaced[key] {
+				continue
+			}
+			o := Occurrence{Start: s, End: x.end(l, v, s), RecurrenceID: s}
+			if s.Before(hi) && overlaps(o, win.Start, win.End) {
+				return []Occurrence{o}, nil
+			}
+		}
+	}
 	if rule != nil {
 		// The rule runs on wall time in DTSTART's zone. An occurrence
 		// that ends after lo starts after lo less its length.
@@ -327,23 +418,32 @@ func (x expansion) master(c *Component, win Range, replaced map[int64]bool) ([]O
 			return x.res.WallOf(t, start.TZID, x.floating)
 		}
 		genLo := start.Wall
-		if !lo.IsZero() {
-			from := lo.AddDate(0, 0, -l.days).Add(-l.exact)
-			if g := wallOf(from).Add(-wallMargin); g.After(genLo) {
-				genLo = g
-			}
+		from := lo.AddDate(0, 0, -l.days).Add(-l.exact)
+		if g := wallOf(from).Add(-wallMargin); g.After(genLo) {
+			genLo = g
 		}
-		// clampWindow always closes hi when it has an anchor.
 		genHi := wallOf(hi).Add(wallMargin)
 		keep := func(w time.Time) bool {
 			v := start
 			v.Wall = w
 			s := x.instant(v)
-			return overlaps(Occurrence{Start: s, End: x.end(l, v, s)}, lo, hi)
+			return s.Before(hi) && overlaps(Occurrence{Start: s, End: x.end(l, v, s)}, win.Start, win.End)
 		}
-		walls, err := expandWalls(*rule, genLo, genHi, maxOccurrences-len(cands), keep)
+		// Excluded and replaced instances count against the cap like any
+		// other, as in the full expansion, but only a reported one ends a
+		// first-hit walk.
+		var stop func(time.Time) bool
+		if x.first {
+			stop = func(w time.Time) bool {
+				v := start
+				v.Wall = w
+				key := x.instant(v).Unix()
+				return !excluded[key] && !replaced[key]
+			}
+		}
+		walls, err := expandWalls(*rule, genLo, genHi, maxOccurrences-len(cands), keep, stop)
 		if err != nil {
-			return nil, time.Time{}, err
+			return nil, err
 		}
 		for _, w := range walls {
 			v := start
@@ -366,11 +466,11 @@ func (x expansion) master(c *Component, win Range, replaced map[int64]bool) ([]O
 		if recurring {
 			o.RecurrenceID = s
 		}
-		if overlaps(o, lo, hi) {
+		if s.Before(hi) && overlaps(o, win.Start, win.End) {
 			out = append(out, o)
 		}
 	}
-	return out, anchor, nil
+	return out, nil
 }
 
 // dateList parses the comma-separated DATE and DATE-TIME values of every
@@ -597,8 +697,9 @@ func gcd(a, b int64) int64 {
 // A rule without COUNT starts at the last of its periods that begins by
 // lo, and only instances that keep accepts count towards limit, so the
 // margins around a window do not use it up. A rule with COUNT is expanded
-// from DTSTART and every instance counts.
-func expandWalls(opt rrule.ROption, lo, hi time.Time, limit int, keep func(time.Time) bool) ([]time.Time, error) {
+// from DTSTART and every instance counts. With stop set, the walk ends at
+// the first instance that keep accepts and stop approves.
+func expandWalls(opt rrule.ROption, lo, hi time.Time, limit int, keep func(time.Time) bool, stop func(time.Time) bool) ([]time.Time, error) {
 	if _, hits := stepCost(opt); limit <= 0 || hits == 0 || !opt.Dtstart.Before(hi) {
 		return nil, nil
 	}
@@ -622,17 +723,18 @@ func expandWalls(opt rrule.ROption, lo, hi time.Time, limit int, keep func(time.
 	var out []time.Time
 	n := 0
 	_, err := expandRule(opt, hi, func(t time.Time) bool {
-		kept := false
+		kept, done := false, false
 		if !t.Before(lo) {
 			w := t.AddDate(-years, 0, 0)
 			if kept = keep(w); kept {
 				out = append(out, w)
+				done = stop != nil && stop(w)
 			}
 		}
 		if kept || counted {
 			n++
 		}
-		return n < limit
+		return n < limit && !done
 	})
 	if err != nil {
 		return nil, recurErr("RRULE: %s", contentline.Clip(err.Error()))
