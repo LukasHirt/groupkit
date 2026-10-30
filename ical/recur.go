@@ -60,6 +60,7 @@ func recurErr(format string, a ...any) error {
 
 // Range is a time range. A zero Start or End leaves that side open.
 type Range struct {
+	// Start and End bound the range. A zero value leaves that side open.
 	Start, End time.Time
 }
 

@@ -22,9 +22,12 @@ var ErrValue = errors.New("ical: invalid value")
 // is an instant only when UTC is true; otherwise it needs a zone to mean
 // anything. For a DATE, Date is true and Wall is midnight of that day.
 type Value struct {
+	// Wall is the date and time as a wall-clock time labelled UTC.
 	Wall time.Time
+	// Date is true for a DATE value.
 	Date bool
-	UTC  bool
+	// UTC is true for a time with the Z suffix.
+	UTC bool
 	// TZID is the first value of the TZID parameter, for a local time tied to
 	// a zone. It is empty for floating and UTC values.
 	TZID string

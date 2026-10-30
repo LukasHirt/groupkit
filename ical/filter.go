@@ -55,6 +55,7 @@ const (
 // later of the range start and its DTSTART (see Calendar.Occurrences); a
 // range with both sides open matches every VEVENT.
 type TimeRange struct {
+	// Start and End bound the range. A zero value leaves that side open.
 	Start, End time.Time
 }
 
@@ -64,10 +65,14 @@ type TimeRange struct {
 // on its own: an event with two ATTENDEE lines matches a negated match that
 // fails on one of them through the other.
 type TextMatch struct {
-	Value     string
+	// Value is the text to look for.
+	Value string
+	// Collation names the comparison. Empty selects i;unicode-casemap.
 	Collation string
+	// MatchType is one of the Match constants. Empty means MatchContains.
 	MatchType string
-	Negate    bool
+	// Negate inverts the result of the comparison.
+	Negate bool
 }
 
 // ParamFilter selects properties by one of their parameters. Name is
@@ -75,9 +80,12 @@ type TextMatch struct {
 // values matches when any value does. IsNotDefined is not combined with
 // TextMatch.
 type ParamFilter struct {
-	Name         string
+	// Name is the parameter name.
+	Name string
+	// IsNotDefined selects properties that lack the parameter.
 	IsNotDefined bool
-	TextMatch    *TextMatch
+	// TextMatch compares the parameter's value.
+	TextMatch *TextMatch
 }
 
 // PropFilter selects components by one property name, compared
@@ -94,11 +102,16 @@ type ParamFilter struct {
 // [Start, End); a DATE stands for midnight in the floating location. Other
 // properties, and values that do not parse, never match a TimeRange.
 type PropFilter struct {
-	Name         string
+	// Name is the property name.
+	Name string
+	// IsNotDefined selects components that lack the property.
 	IsNotDefined bool
-	TimeRange    *TimeRange
-	TextMatch    *TextMatch
-	Params       []ParamFilter
+	// TimeRange limits the property's date-time value.
+	TimeRange *TimeRange
+	// TextMatch compares the property's value.
+	TextMatch *TextMatch
+	// Params filter on the property's parameters.
+	Params []ParamFilter
 }
 
 // CompFilter selects components by name, compared case-insensitively (ASCII
@@ -118,11 +131,16 @@ type PropFilter struct {
 // a TimeRange matches nothing. A filter holds at most 16 comp-filter time
 // ranges, since each distinct one expands the object's recurrences.
 type CompFilter struct {
-	Name         string
+	// Name is the component name, such as VCALENDAR or VEVENT.
+	Name string
+	// IsNotDefined selects when no such component exists.
 	IsNotDefined bool
-	TimeRange    *TimeRange
-	Props        []PropFilter
-	Comps        []CompFilter
+	// TimeRange limits the component to a time range.
+	TimeRange *TimeRange
+	// Props are the property filters the component must satisfy.
+	Props []PropFilter
+	// Comps are the filters for nested components.
+	Comps []CompFilter
 }
 
 // Validate reports a nil filter, an outer filter that does not name

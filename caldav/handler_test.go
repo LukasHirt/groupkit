@@ -342,3 +342,18 @@ func TestOptionsStar(t *testing.T) {
 		t.Error("Resolve called for *")
 	}
 }
+
+func TestMoveCopyLockAndACLAre405(t *testing.T) {
+	h := newTestHandler(t, "/dav", resolveAs("o"))
+	for _, method := range []string{"MOVE", "COPY", "LOCK", "UNLOCK", "ACL"} {
+		for _, path := range []string{"/dav/calendars/alice/", "/dav/calendars/alice/work/", "/dav/calendars/alice/work/a.ics"} {
+			rec := do(h, method, path)
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Errorf("%s %s: status = %d, want 405", method, path, rec.Code)
+			}
+			if rec.Header().Get("Allow") == "" {
+				t.Errorf("%s %s: no Allow header", method, path)
+			}
+		}
+	}
+}

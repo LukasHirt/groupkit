@@ -1030,3 +1030,11 @@ func TestQueryWithCalendarDataSkipsUnparsableObjects(t *testing.T) {
 		t.Errorf("hrefs only: GetObject called %d times, want 0", n)
 	}
 }
+
+func TestFreeBusyQueryIsUnsupported(t *testing.T) {
+	f := newFixture(t, "a.ics")
+	rec := f.report(calURL, `<C:free-busy-query `+nsDecl+`><C:time-range start="20260310T000000Z" end="20260311T000000Z"/></C:free-busy-query>`)
+	if rec.Code != http.StatusForbidden || precondition(t, rec) != "supported-report" {
+		t.Errorf("free-busy-query: %d %s", rec.Code, rec.Body)
+	}
+}

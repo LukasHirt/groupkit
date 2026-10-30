@@ -30,14 +30,19 @@ func (k Kind) Valid() bool { return k == KindCalendar || k == KindAddressBook }
 // CollectionRef addresses a collection. A calendar and an address book of the
 // same owner may share a name.
 type CollectionRef struct {
+	// Owner is the opaque identifier of the collection's owner.
 	Owner string
-	Kind  Kind
-	Name  string
+	// Kind says whether it is a calendar or an address book.
+	Kind Kind
+	// Name is the collection's name, unique for an owner and a kind.
+	Name string
 }
 
 // Props are the properties of a collection that clients can set.
 type Props struct {
+	// DisplayName is the name clients show for the collection.
 	DisplayName string
+	// Description is a free-text description.
 	Description string
 	// Color is a CSS-style colour such as "#ff0000ff", as Apple clients send it.
 	Color string
@@ -52,24 +57,33 @@ type Props struct {
 
 // PropsUpdate changes some properties and leaves nil fields as they are.
 type PropsUpdate struct {
+	// DisplayName, when not nil, sets Props.DisplayName.
 	DisplayName *string
+	// Description, when not nil, sets Props.Description.
 	Description *string
-	Color       *string
-	Order       *int
-	Timezone    *string
-	Components  *[]string
+	// Color, when not nil, sets Props.Color.
+	Color *string
+	// Order, when not nil, sets Props.Order.
+	Order *int
+	// Timezone, when not nil, sets Props.Timezone.
+	Timezone *string
+	// Components, when not nil, sets Props.Components.
+	Components *[]string
 }
 
 // Collection is a collection and its current state.
 type Collection struct {
+	// Ref addresses the collection.
 	Ref CollectionRef
 	// ID is unique within the store and never reused, even if a collection of
 	// the same name is deleted and created again.
-	ID    string
+	ID string
+	// Props are the collection's properties.
 	Props Props
 	// Revision is the collection's current revision.
 	Revision uint64
-	Created  time.Time
+	// Created is when the collection was created.
+	Created time.Time
 }
 
 // Object is a calendar or contact object.
@@ -84,7 +98,8 @@ type Object struct {
 	// Size is the length of the data in bytes. Every Store implementation
 	// must set it in listings, with or without data, and in GetObject
 	// results; engines rely on it to answer without reading object data.
-	Size    int64
+	Size int64
+	// ModTime is when the object was last written.
 	ModTime time.Time
 	// UID is the UID the engine reported when the object was written.
 	UID string
@@ -115,7 +130,9 @@ type ListOptions struct {
 
 // Change is one object that differs from a given revision.
 type Change struct {
-	Name    string
+	// Name is the object's name.
+	Name string
+	// Deleted is true when the object was deleted.
 	Deleted bool
 }
 

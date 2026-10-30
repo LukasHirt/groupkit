@@ -35,13 +35,16 @@ const (
 // i;unicode-casemap and an empty MatchType selects contains. Negate inverts
 // the result of this one comparison, and it applies to each property value
 // on its own: on a card with two EMAIL lines, a negated match that fails on
-// one line still matches through the other, so the card matches (SabreDAV
-// behaves the same way).
+// one line still matches through the other, so the card matches.
 type TextMatch struct {
-	Value     string
+	// Value is the text to look for.
+	Value string
+	// Collation names the comparison. Empty selects i;unicode-casemap.
 	Collation string
+	// MatchType is one of the Match constants. Empty means MatchContains.
 	MatchType string
-	Negate    bool
+	// Negate inverts the result of the comparison.
+	Negate bool
 
 	// prep is set by Filter.Validate: the resolved collation and the folded
 	// value. It is only used while it still describes Value and Collation.
@@ -82,34 +85,43 @@ func (fc *foldCache) fold(col collation.Collation, s string) string {
 // compared case-insensitively (ASCII letters only). IsNotDefined is not
 // combined with TextMatch.
 type ParamFilter struct {
-	Name         string
+	// Name is the parameter name.
+	Name string
+	// IsNotDefined selects properties that lack the parameter.
 	IsNotDefined bool
-	TextMatch    *TextMatch
+	// TextMatch compares the parameter's value.
+	TextMatch *TextMatch
 }
 
 // PropFilter selects cards by one property name. Test combines TextMatches
 // and Params and is "anyof" when empty; an unknown Test that was never
 // validated also falls back to "anyof". All the conditions are tested against
 // one property instance (RFC 6352 section 10.5.1), and the filter matches
-// when some instance satisfies them. Some servers (SabreDAV, Radicale)
-// instead aggregate text matches across the instances of a property; here,
-// allof with "first" and "second" does not match a card whose one EMAIL line
-// holds "first" and another holds "second".
+// when some instance satisfies them. Text matches are not aggregated across
+// the instances of a property: allof with "first" and "second" does not
+// match a card whose one EMAIL line holds "first" and another holds "second".
 // IsNotDefined matches a card without the property and is not combined with
 // TextMatches or Params.
 type PropFilter struct {
-	Name         string
+	// Name is the property name.
+	Name string
+	// IsNotDefined selects cards that lack the property.
 	IsNotDefined bool
-	Test         string
-	TextMatches  []TextMatch
-	Params       []ParamFilter
+	// Test is TestAnyOf or TestAllOf. Empty means TestAnyOf.
+	Test string
+	// TextMatches compare the property's value.
+	TextMatches []TextMatch
+	// Params filter on the property's parameters.
+	Params []ParamFilter
 }
 
 // Filter is the filter of an addressbook-query report. Test combines the
 // PropFilters and is "anyof" when empty (or unknown and never validated). A
 // nil Filter or one without PropFilters matches every card.
 type Filter struct {
-	Test  string
+	// Test is TestAnyOf or TestAllOf. Empty means TestAnyOf.
+	Test string
+	// Props are the property filters.
 	Props []PropFilter
 }
 

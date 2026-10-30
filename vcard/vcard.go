@@ -26,10 +26,14 @@ var (
 // Property is one content line of a card. Name, Group and parameter names are
 // upper-case. Raw is the value as it appears on the line, still escaped.
 type Property struct {
-	Group  string
-	Name   string
+	// Group is the group prefix, such as ITEM1, or empty.
+	Group string
+	// Name is the property name in upper case.
+	Name string
+	// Params maps each upper-case parameter name to its values.
 	Params map[string][]string
-	Raw    string
+	// Raw is the value as written on the line, still escaped.
+	Raw string
 }
 
 // Text returns the value with backslash escapes resolved: \\, \, and \; stand
@@ -58,8 +62,10 @@ func (p Property) Text() string {
 
 // Card is a parsed vCard. BEGIN, END and VERSION are not part of Props.
 type Card struct {
+	// Version is the value of the VERSION property.
 	Version string
-	Props   []Property
+	// Props are the card's properties in the order they appear.
+	Props []Property
 }
 
 // UID returns the text of the card's UID property, or "" if the card has

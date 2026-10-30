@@ -697,6 +697,22 @@ func TestCreateBoundaryLengths(t *testing.T) {
 	}
 }
 
+func TestCreateOneByteOverTheLengthLimitsIsRefused(t *testing.T) {
+	for name, props := range map[string]string{
+		"display name": `<D:displayname>` + strings.Repeat("x", 256) + `</D:displayname>`,
+		"description":  `<C:calendar-description>` + strings.Repeat("d", 4097) + `</C:calendar-description>`,
+	} {
+		f := emptyFixture(t, memory.New())
+		rec := f.create("MKCALENDAR", newURL, props)
+		if rec.Code < 400 {
+			t.Errorf("%s one byte over the limit: status %d, want a refusal", name, rec.Code)
+		}
+		if _, err := f.getCal(t, newRef); err == nil {
+			t.Errorf("%s one byte over the limit: the calendar was created", name)
+		}
+	}
+}
+
 func TestCreateExistsHomeObjectAndTooLarge(t *testing.T) {
 	f := memFixture(t)
 	for _, m := range methods {
