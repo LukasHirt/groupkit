@@ -49,9 +49,11 @@ const (
 
 // TimeRange is the time-range element of a query. Start and End are
 // instants; a zero one leaves that side open. End must not be before Start.
-// On a VEVENT comp-filter an open side reaches at most 100 years from the
-// other bound, or from DTSTART when both are open (see
-// Calendar.Occurrences); a range with both sides open matches every VEVENT.
+// A zero time.Time is open, so the instant 0001-01-01T00:00:00Z cannot be
+// asked for; callers move such a bound by a nanosecond. On a VEVENT
+// comp-filter a recurring event is expanded over at most 100 years, from the
+// later of the range start and its DTSTART (see Calendar.Occurrences); a
+// range with both sides open matches every VEVENT.
 type TimeRange struct {
 	Start, End time.Time
 }
@@ -336,7 +338,8 @@ func (m *matcher) child(parent *Component, f *CompFilter, topLevel bool) bool {
 }
 
 // eventsIn reports whether the calendar's VEVENTs have an occurrence that
-// overlaps tr. A recurrence that cannot be expanded has none.
+// overlaps tr, stopping at the first one. A recurrence that cannot be
+// expanded has none.
 func (m *matcher) eventsIn(tr TimeRange) bool {
 	if tr.Start.IsZero() && tr.End.IsZero() {
 		return true
@@ -346,8 +349,8 @@ func (m *matcher) eventsIn(tr TimeRange) bool {
 	if hit, ok := m.events[key]; ok {
 		return hit
 	}
-	occs, err := m.cal.Occurrences(m.res, m.floating, Range(key))
-	hit := err == nil && len(occs) > 0
+	hit, err := m.cal.occursIn(m.res, m.floating, Range(key))
+	hit = err == nil && hit
 	if m.events == nil {
 		m.events = map[TimeRange]bool{}
 	}

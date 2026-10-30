@@ -13,11 +13,12 @@
 //   - ical and vcard: parsing, validation and query matching
 //   - caldav and carddav: protocol engines that serve a store over HTTP
 //
-// To serve contacts to standard clients, call NewServer with a store, a URL
-// prefix and two functions that tie requests to your own users, then mount
-// Server.Handler under the prefix and Server.WellKnown at
-// /.well-known/carddav:
+// To serve contacts and calendars to standard clients, call NewServer with a
+// store, a URL prefix and two functions that tie requests to your own users,
+// then mount Server.Handler under the prefix and Server.WellKnown at the
+// well-known paths of both protocols:
 //
+//	// currentUser and authorize are your own functions; see Config.
 //	srv, err := groupkit.NewServer(groupkit.Config{
 //		Store:       st,
 //		Prefix:      "/dav",
@@ -25,13 +26,21 @@
 //		Authorize:   authorize,
 //		Challenge:   `Basic realm="example"`,
 //	})
+//	mux := http.NewServeMux()
 //	mux.Handle("/dav/", srv.Handler())
 //	mux.Handle("/.well-known/carddav", srv.WellKnown())
+//	mux.Handle("/.well-known/caldav", srv.WellKnown())
+//
+// The package example is a complete, compiled version of this.
+//
+// Address books live under Prefix + "/addressbooks/" and calendars under
+// Prefix + "/calendars/". Config.DisableAddressBooks and
+// Config.DisableCalendars switch either protocol off.
 //
 // The server does not authenticate anyone. CurrentUser and Authorize report
 // who is asking and what they may reach, using the errors ErrUnauthenticated,
 // ErrForbidden and ErrUserNotFound. Call EnsureDefaultCollections when you
-// provision a user so clients find an address book.
+// provision a user so clients find an address book and a calendar.
 //
 // The API is not stable yet.
 package groupkit
@@ -41,9 +50,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/LukasHirt/groupkit/access"
+	"github.com/LukasHirt/groupkit/caldav"
 	"github.com/LukasHirt/groupkit/carddav"
 	"github.com/LukasHirt/groupkit/internal/dav"
 	"github.com/LukasHirt/groupkit/store"
@@ -64,7 +75,7 @@ var (
 
 // Config configures a Server.
 type Config struct {
-	// Store holds the address books. Required.
+	// Store holds the address books and calendars. Required.
 	Store store.Store
 
 	// Prefix is the URL path the server is mounted at, such as "/dav". It is
@@ -79,10 +90,11 @@ type Config struct {
 	// answers 500. The name must not be empty. Required.
 	CurrentUser func(r *http.Request) (string, error)
 
-	// Authorize maps the user named in an address book URL (already
-	// percent-decoded) to the store owner, or refuses the request with an
-	// error wrapping one of the errors above. Any other error answers 500.
-	// It is called on every address book request. Required.
+	// Authorize maps the user named in an address book or calendar URL
+	// (already percent-decoded) to the store owner, or refuses the request
+	// with an error wrapping one of the errors above. Any other error
+	// answers 500. It is called on every address book and calendar request.
+	// Required.
 	Authorize func(r *http.Request, urlUser string) (owner string, err error)
 
 	// Challenge is the value of the WWW-Authenticate header sent with a 401,
@@ -92,6 +104,17 @@ type Config struct {
 
 	// MaxObjectSize is the largest accepted object in bytes. Zero means 10 MiB.
 	MaxObjectSize int64
+
+	// DisableAddressBooks turns CardDAV off: the paths under
+	// Prefix + "/addressbooks/" answer 404, the principal has no
+	// addressbook-home-set, and the server's EnsureDefaultCollections method
+	// creates no address book. The default is false.
+	DisableAddressBooks bool
+
+	// DisableCalendars turns CalDAV off in the same way for
+	// Prefix + "/calendars/" and calendar-home-set. The default is false.
+	// Disabling both protocols is an error.
+	DisableCalendars bool
 
 	// Logger receives server faults: method, kind of resource and error,
 	// never credentials, headers or query strings. Nil discards them.
@@ -111,6 +134,9 @@ type Server struct {
 	currentUser func(r *http.Request) (string, error)
 	challenge   string
 	log         *slog.Logger
+
+	store                          store.Store
+	disableBooks, disableCalendars bool
 
 	// mounts are the protocol handlers by first path segment.
 	mounts []mount
@@ -139,32 +165,58 @@ func NewServer(cfg Config) (*Server, error) {
 	if err := dav.ValidPrefix(cfg.Prefix); err != nil {
 		return nil, fmt.Errorf("groupkit: invalid Config.Prefix: %w", err)
 	}
-	cards, err := carddav.New(carddav.Config{
-		Store:         cfg.Store,
-		Prefix:        cfg.Prefix,
-		Resolve:       cfg.Authorize,
-		MaxObjectSize: cfg.MaxObjectSize,
-		Logger:        cfg.Logger,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("groupkit: %w", err)
+	if cfg.DisableAddressBooks && cfg.DisableCalendars {
+		return nil, errors.New("groupkit: Config.DisableAddressBooks and Config.DisableCalendars disable everything")
 	}
 	s := &Server{
-		davHeader:   dav.ComplianceHeader(),
-		prefix:      cfg.Prefix,
-		currentUser: cfg.CurrentUser,
-		challenge:   cfg.Challenge,
-		log:         cfg.Logger,
+		davHeader:        dav.ComplianceHeader(),
+		prefix:           cfg.Prefix,
+		store:            cfg.Store,
+		currentUser:      cfg.CurrentUser,
+		challenge:        cfg.Challenge,
+		log:              cfg.Logger,
+		disableBooks:     cfg.DisableAddressBooks,
+		disableCalendars: cfg.DisableCalendars,
 	}
 	if s.log == nil {
 		s.log = slog.New(slog.DiscardHandler)
 	}
-	s.mount("addressbooks", cards, dav.CardDAVClasses()...)
-	s.homeSets = append(s.homeSets, func(user string) map[xmlName]dav.PropDef {
-		return map[xmlName]dav.PropDef{
-			dav.AddressbookHomeSet: fixed(dav.HrefProp(dav.AddressbookHomeSet, cards.HomeHref(user))),
+	if !cfg.DisableAddressBooks {
+		cards, err := carddav.New(carddav.Config{
+			Store:         cfg.Store,
+			Prefix:        cfg.Prefix,
+			Resolve:       cfg.Authorize,
+			MaxObjectSize: cfg.MaxObjectSize,
+			Logger:        cfg.Logger,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("groupkit: %w", err)
 		}
-	})
+		s.mount("addressbooks", cards, dav.CardDAVClasses()...)
+		s.homeSets = append(s.homeSets, func(user string) map[xmlName]dav.PropDef {
+			return map[xmlName]dav.PropDef{
+				dav.AddressbookHomeSet: fixed(dav.HrefProp(dav.AddressbookHomeSet, cards.HomeHref(user))),
+			}
+		})
+	}
+	if !cfg.DisableCalendars {
+		cals, err := caldav.New(caldav.Config{
+			Store:         cfg.Store,
+			Prefix:        cfg.Prefix,
+			Resolve:       cfg.Authorize,
+			MaxObjectSize: cfg.MaxObjectSize,
+			Logger:        cfg.Logger,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("groupkit: %w", err)
+		}
+		s.mount("calendars", cals, dav.CalDAVClasses()...)
+		s.homeSets = append(s.homeSets, func(user string) map[xmlName]dav.PropDef {
+			return map[xmlName]dav.PropDef{
+				dav.CalendarHomeSet: fixed(dav.HrefProp(dav.CalendarHomeSet, cals.HomeHref(user))),
+			}
+		})
+	}
 	return s, nil
 }
 
@@ -173,7 +225,11 @@ func isControl(r rune) bool { return r < 0x20 || r == 0x7f }
 // mount adds a protocol handler under Prefix + "/" + segment + "/". A 401 it
 // writes gets the WWW-Authenticate header when a challenge is configured.
 func (s *Server) mount(segment string, h http.Handler, classes ...string) {
-	s.classes = append(s.classes, classes...)
+	for _, c := range classes {
+		if !slices.Contains(s.classes, c) {
+			s.classes = append(s.classes, c)
+		}
+	}
 	s.davHeader = dav.ComplianceHeader(s.classes...)
 	if s.challenge != "" {
 		inner := h

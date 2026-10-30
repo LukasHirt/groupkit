@@ -120,7 +120,7 @@ func TestSyncInitialAndDeltas(t *testing.T) {
 			}
 		}
 		col, _ := st.GetCollection(context.Background(), objRef)
-		id, rev, err := parseSyncToken(s.token)
+		id, rev, err := dav.ParseSyncToken(s.token)
 		if err != nil || id != col.ID || rev != col.Revision {
 			t.Fatalf("token %q: id=%q rev=%d err=%v; collection %q/%d", s.token, id, rev, err, col.ID, col.Revision)
 		}
@@ -185,8 +185,8 @@ func TestSyncInvalidTokens(t *testing.T) {
 		tokens := map[string]string{
 			"garbage":     "hello",
 			"huge rev":    "urn:groupkit:sync:" + col.ID + ":99999999999999999999999",
-			"future rev":  syncToken(store.Collection{ID: col.ID, Revision: col.Revision + 1}),
-			"other id":    syncToken(store.Collection{ID: "other", Revision: 1}),
+			"future rev":  dav.FormatSyncToken(store.Collection{ID: col.ID, Revision: col.Revision + 1}),
+			"other id":    dav.FormatSyncToken(store.Collection{ID: "other", Revision: 1}),
 			"no revision": "urn:groupkit:sync:" + col.ID,
 			"negative":    "urn:groupkit:sync:" + col.ID + ":-1",
 			"too long":    "urn:groupkit:sync:" + strings.Repeat("x", 600) + ":1",
@@ -273,7 +273,7 @@ func TestSyncCTagEqualsTokenRevision(t *testing.T) {
 		putN(t, f, "a.vcf", "b.vcf")
 		wantStatus(t, f.do("DELETE", "a.vcf", nil, nil), http.StatusNoContent)
 		s := parseSync(t, f.sync(etagSync("")))
-		_, rev, err := parseSyncToken(s.token)
+		_, rev, err := dav.ParseSyncToken(s.token)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -341,29 +341,28 @@ func TestSyncOwnerIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	aliceCol, _ := st.GetCollection(ctx, aliceRef)
-	req = httptest.NewRequest("REPORT", "/dav/addressbooks/alice/contacts/", strings.NewReader(etagSync(syncToken(aliceCol))))
+	req = httptest.NewRequest("REPORT", "/dav/addressbooks/alice/contacts/", strings.NewReader(etagSync(dav.FormatSyncToken(aliceCol))))
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	wantPrecondition(t, rec, http.StatusForbidden, "valid-sync-token")
 }
 
 func TestSyncCap(t *testing.T) {
-	old := maxSyncChanges
-	maxSyncChanges = 3
-	t.Cleanup(func() { maxSyncChanges = old })
+	restore := dav.SetSyncCapForTesting(3)
+	t.Cleanup(restore)
 
 	f := memFixture(t)
 	putN(t, f, "a.vcf", "b.vcf", "c.vcf", "d.vcf", "e.vcf")
 	// An initial sync is never cut: all objects, no 507, the current token.
 	rec := f.sync(etagSync(""))
-	if strings.Contains(rec.Body.String(), "507") {
+	if strings.Contains(rec.Body.String(), "HTTP/1.1 507") {
 		t.Errorf("initial sync truncated: %s", rec.Body)
 	}
 	s := parseSync(t, rec)
 	eq(t, s.hrefNames(), []string{"a.vcf", "b.vcf", "c.vcf", "d.vcf", "e.vcf"})
 	col, _ := f.st.GetCollection(context.Background(), objRef)
-	if s.token != syncToken(col) {
-		t.Errorf("token = %q, want %q", s.token, syncToken(col))
+	if s.token != dav.FormatSyncToken(col) {
+		t.Errorf("token = %q, want %q", s.token, dav.FormatSyncToken(col))
 	}
 	// Following the token finds nothing left to do.
 	if s2 := parseSync(t, f.sync(etagSync(s.token))); len(s2.hrefs) != 0 {
@@ -373,12 +372,12 @@ func TestSyncCap(t *testing.T) {
 	// A delta over the cap forces a resync, which is uncapped.
 	base := col
 	touchN(t, f, "a.vcf", "b.vcf", "c.vcf", "d.vcf")
-	f.wantInvalidToken(t, etagSync(syncToken(base)))
+	f.wantInvalidToken(t, etagSync(dav.FormatSyncToken(base)))
 	eq(t, parseSync(t, f.sync(etagSync(""))).hrefNames(), []string{"a.vcf", "b.vcf", "c.vcf", "d.vcf", "e.vcf"})
 
 	// At the cap is fine.
-	maxSyncChanges = 4
-	eq(t, parseSync(t, f.sync(etagSync(syncToken(base)))).hrefNames(), []string{"a.vcf", "b.vcf", "c.vcf", "d.vcf"})
+	dav.SetSyncCapForTesting(4)
+	eq(t, parseSync(t, f.sync(etagSync(dav.FormatSyncToken(base)))).hrefNames(), []string{"a.vcf", "b.vcf", "c.vcf", "d.vcf"})
 }
 
 // changesFailStore fails Changes with err; changesStore wraps it.
@@ -456,7 +455,7 @@ func FuzzSyncCollection(f *testing.F) {
 	}
 	col, _ := st.GetCollection(context.Background(), ref)
 	f.Fuzz(func(t *testing.T, body, token string) {
-		for _, b := range []string{body, strings.Replace(body, "</D:sync-token>", token+"</D:sync-token>", 1), etagSync(token), etagSync(syncToken(col) + token)} {
+		for _, b := range []string{body, strings.Replace(body, "</D:sync-token>", token+"</D:sync-token>", 1), etagSync(token), etagSync(dav.FormatSyncToken(col) + token)} {
 			req := httptest.NewRequest("REPORT", objBase, strings.NewReader(b))
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, req)
@@ -516,8 +515,8 @@ func TestSyncTokenRevisionComesFromChanges(t *testing.T) {
 		s := parseSync(t, f.sync(etagSync("")))
 		eq(t, s.hrefNames(), []string{"a.vcf", "late.vcf"})
 		col, _ := st.GetCollection(context.Background(), objRef)
-		if s.token != syncToken(col) {
-			t.Errorf("token = %q, want %q (the revision Changes answered)", s.token, syncToken(col))
+		if s.token != dav.FormatSyncToken(col) {
+			t.Errorf("token = %q, want %q (the revision Changes answered)", s.token, dav.FormatSyncToken(col))
 		}
 	})
 }
@@ -529,5 +528,35 @@ func TestSyncPaddedToken(t *testing.T) {
 	s := parseSync(t, f.sync(etagSync("\n  "+tok+"\t ")))
 	if len(s.hrefs) != 0 || s.token != tok {
 		t.Errorf("padded token: %v %q", s.hrefs, s.token)
+	}
+}
+
+// cancelAfterListStore ends the request context once ListObjects has
+// answered, as a deadline that strikes while the answer streams does.
+type cancelAfterListStore struct {
+	store.Store
+	cancel func()
+}
+
+func (c cancelAfterListStore) ListObjects(ctx context.Context, ref store.CollectionRef, opts store.ListOptions) ([]store.Object, error) {
+	out, err := c.Store.ListObjects(ctx, ref, opts)
+	if c.cancel != nil {
+		c.cancel()
+	}
+	return out, err
+}
+
+func TestSyncCancelledWhileStreamingHasNoToken(t *testing.T) {
+	wrap := &cancelAfterListStore{Store: memory.New()}
+	f := newObjFixture(t, wrap, 1<<20)
+	putN(t, f, "a.vcf", "b.vcf")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	wrap.cancel = cancel
+	req := httptest.NewRequest("REPORT", objBase, strings.NewReader(etagSync(""))).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	f.h.ServeHTTP(rec, req)
+	if strings.Contains(rec.Body.String(), "sync-token") {
+		t.Errorf("a cut answer carries a token: %s", rec.Body)
 	}
 }

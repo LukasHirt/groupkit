@@ -103,7 +103,7 @@ func (h *Handler) bookResource(user string, c store.Collection) dav.Resource {
 	}
 	props[dav.DisplayName] = text(dav.DisplayName, name)
 	props[dav.GetCTag] = text(dav.GetCTag, strconv.FormatUint(c.Revision, 10))
-	props[dav.SyncToken] = text(dav.SyncToken, syncToken(c))
+	props[dav.SyncToken] = text(dav.SyncToken, dav.FormatSyncToken(c))
 	props[dav.AddressbookDescription] = text(dav.AddressbookDescription, c.Props.Description)
 	props[dav.CRMaxResourceSize] = text(dav.CRMaxResourceSize, strconv.FormatInt(h.maxSize, 10))
 	props[dav.SupportedAddressData] = fixed(dav.Prop{Name: dav.SupportedAddressData, Write: func(w *dav.Writer) {

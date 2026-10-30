@@ -390,8 +390,8 @@ func rawLine(t *testing.T, addr, req string) int {
 }
 
 // FuzzServerRequests sends arbitrary requests with a Depth header, as an
-// authenticated user, to a server whose address book also holds objects
-// that bypassed validation. It must never panic or answer 5xx.
+// authenticated user, to a server whose address book and calendar also hold
+// objects that bypassed validation. It must never panic or answer 5xx.
 func FuzzServerRequests(f *testing.F) {
 	st := memory.New()
 	ctx := context.Background()
@@ -405,6 +405,17 @@ func FuzzServerRequests(f *testing.F) {
 		"partial.vcf": "BEGIN:VCARD\r\nVERSION:4.0\r\n",
 	} {
 		if _, err := st.PutObject(ctx, aliceContacts, name, []byte(data), store.PutOptions{}); err != nil {
+			f.Fatal(err)
+		}
+	}
+	for name, data := range map[string]string{
+		"weekly.ics":  weeklyEvent,
+		"moved.ics":   movedEvent,
+		"windows.ics": windowsEvent,
+		"bad.ics":     "\x00\xffnot a calendar",
+		"partial.ics": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\n",
+	} {
+		if _, err := st.PutObject(ctx, alicePersonal, name, []byte(data), store.PutOptions{}); err != nil {
 			f.Fatal(err)
 		}
 	}
@@ -432,6 +443,34 @@ func FuzzServerRequests(f *testing.F) {
 	f.Add("GET", contactsHref+"partial.vcf", "", "")
 	f.Add("PROPFIND", "/dav/principals/alice/", "0", "")
 	f.Add("MOVE", contactsHref+"a.vcf", "", "")
+
+	const cal = `xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav"`
+	f.Add("PROPFIND", personalHref, "1", propfindBody)
+	f.Add("PROPFIND", "/dav/calendars/alice/", "1", `<D:propfind `+cal+`><D:prop><D:resourcetype/>`+
+		`<C:supported-calendar-component-set/><C:calendar-home-set/><D:sync-token/></D:prop></D:propfind>`)
+	f.Add("REPORT", personalHref, "1", `<C:calendar-query `+cal+`><D:prop><D:getetag/><C:calendar-data/></D:prop>`+
+		`<C:filter><C:comp-filter name="VCALENDAR"><C:comp-filter name="VEVENT">`+
+		`<C:time-range start="20260330T000000Z" end="20260331T000000Z"/></C:comp-filter></C:comp-filter></C:filter></C:calendar-query>`)
+	f.Add("REPORT", personalHref, "1", `<C:calendar-query `+cal+`><D:prop><D:getetag/></D:prop>`+
+		`<C:filter><C:comp-filter name="VCALENDAR"><C:comp-filter name="VEVENT"><C:prop-filter name="UID">`+
+		`<C:text-match collation="i;ascii-casemap" negate-condition="yes">moved</C:text-match></C:prop-filter>`+
+		`<C:prop-filter name="DTSTART"><C:param-filter name="TZID"><C:is-not-defined/></C:param-filter></C:prop-filter>`+
+		`</C:comp-filter></C:comp-filter></C:filter><C:timezone>BEGIN:VCALENDAR</C:timezone></C:calendar-query>`)
+	f.Add("REPORT", personalHref, "1", `<C:calendar-multiget `+cal+`><D:prop><D:getetag/><C:calendar-data>`+
+		`<C:expand start="20260301T000000Z" end="20260401T000000Z"/></C:calendar-data></D:prop>`+
+		`<D:href>`+personalHref+`weekly.ics</D:href><D:href>`+personalHref+`bad.ics</D:href><D:href>/x</D:href></C:calendar-multiget>`)
+	f.Add("REPORT", personalHref, "1", `<D:sync-collection xmlns:D="DAV:"><D:sync-token/><D:sync-level>1</D:sync-level>`+
+		`<D:prop><D:getetag/></D:prop><D:limit><D:nresults>1</D:nresults></D:limit></D:sync-collection>`)
+	f.Add("MKCALENDAR", "/dav/calendars/alice/new/", "", `<C:mkcalendar `+cal+` xmlns:A="http://apple.com/ns/ical/"><D:set><D:prop>`+
+		`<D:displayname>N</D:displayname><A:calendar-color>#FF0000FF</A:calendar-color>`+
+		`<C:supported-calendar-component-set><C:comp name="VTODO"/></C:supported-calendar-component-set>`+
+		`<C:calendar-timezone>`+recurHead+pragueZone+recurTail+`</C:calendar-timezone></D:prop></D:set></C:mkcalendar>`)
+	f.Add("PROPPATCH", personalHref, "", `<D:propertyupdate `+cal+`><D:set><D:prop><D:displayname>X</D:displayname>`+
+		`<C:calendar-description>d</C:calendar-description></D:prop></D:set><D:remove><D:prop><D:getetag/></D:prop></D:remove></D:propertyupdate>`)
+	f.Add("PUT", personalHref+"c.ics", "", allDayEvent)
+	f.Add("PUT", personalHref+"d.ics", "", strings.Replace(nowhereEvent, "nowhere-1", "weekly-1", 1))
+	f.Add("DELETE", personalHref+"bad.ics", "", "")
+	f.Add("GET", personalHref+"partial.ics", "", "")
 
 	f.Fuzz(func(t *testing.T, method, path, depth, body string) {
 		if !validMethod(method) || !strings.HasPrefix(path, "/") {

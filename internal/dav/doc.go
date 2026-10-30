@@ -17,6 +17,9 @@
 //     *Error.
 //   - PropFind evaluates a PROPFIND request against a Resource and returns a
 //     Response for WriteMultiStatus.
+//   - ParseSyncRequest and AnswerSync implement DAV:sync-collection for both
+//     engines: token checks, the delta cap, the response stream and the new
+//     token. FormatSyncToken and ParseSyncToken make and read the tokens.
 //   - The request helpers are ReadBody, ParseDepth, ParseCond, CheckPreconditions,
 //     CleanSegment, EscapeHref, HTTPDate and StoreError.
 //

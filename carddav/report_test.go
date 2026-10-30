@@ -7,6 +7,7 @@ package carddav
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"path"
@@ -543,4 +544,48 @@ func FuzzReport(f *testing.F) {
 			t.Fatalf("status %d for %q", rec.Code, body)
 		}
 	})
+}
+
+// A query that selects every card but asks for address-data reads each card
+// anyway. One whose data does not parse is skipped, as with a filter:
+// clients parse every address-data they get, and one bad object would fail
+// their whole query.
+func TestQueryWithAddressDataSkipsUnparsableObjects(t *testing.T) {
+	f := newReportFixture(t)
+	for n, d := range map[string]string{
+		"garbage.vcf": "\x00\xff not a card at all",
+		"cal.vcf":     "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n",
+	} {
+		if _, err := f.mem.PutObject(context.Background(), f.bookRef(), n, []byte(d), store.PutOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var logs strings.Builder
+	f.h.log = slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	data := `<D:prop><D:getetag/><CR:address-data/></D:prop>`
+	for name, flt := range map[string]string{
+		"no filter":    "",
+		"empty filter": filter("", ""),
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := parseReply(t, f.report(bookURL, `<CR:addressbook-query `+nsDecl+`>`+data+flt+`</CR:addressbook-query>`))
+			if want := []string{"ada.vcf", "bob.vcf", "carl.vcf"}; !slices.Equal(bases(r), want) {
+				t.Errorf("got %v, want %v", bases(r), want)
+			}
+		})
+	}
+	if out := logs.String(); !strings.Contains(out, "garbage.vcf") || !strings.Contains(out, "cal.vcf") {
+		t.Errorf("warnings not logged by name:\n%s", out)
+	}
+
+	// Without address-data nothing is read, and every object is listed.
+	f.st.gets.Store(0)
+	r := parseReply(t, f.report(bookURL, query("")))
+	if want := []string{"ada.vcf", "bob.vcf", "cal.vcf", "carl.vcf", "garbage.vcf"}; !slices.Equal(bases(r), want) {
+		t.Errorf("hrefs only: got %v, want %v", bases(r), want)
+	}
+	if n := f.st.gets.Load(); n != 0 {
+		t.Errorf("hrefs only: GetObject called %d times, want 0", n)
+	}
 }

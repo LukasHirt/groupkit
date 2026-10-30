@@ -26,7 +26,7 @@ const userHeader = "X-Test-User"
 const testChallenge = `Basic realm="groupkit"`
 
 // testConfig returns a valid Config whose users come from userHeader. A user
-// may only reach its own principal and address books.
+// may only reach its own principal, address books and calendars.
 func testConfig(prefix string) groupkit.Config {
 	return groupkit.Config{
 		Store:  memory.New(),
@@ -312,7 +312,7 @@ func TestOptionsAndMethods(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Errorf("OPTIONS %s = %d", target, w.Code)
 		}
-		if got := w.Header().Get("DAV"); got != "1, 3, addressbook, extended-mkcol" {
+		if got := w.Header().Get("DAV"); got != "1, 3, addressbook, extended-mkcol, calendar-access" {
 			t.Errorf("DAV = %q", got)
 		}
 		if got := w.Header().Get("Allow"); got != "OPTIONS, PROPFIND" {
