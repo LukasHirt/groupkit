@@ -37,10 +37,13 @@ var (
 
 // ConflictError reports which object holds the UID that caused ErrUIDConflict.
 type ConflictError struct {
-	UID  string
+	// UID is the UID that is already in use.
+	UID string
+	// Name is the object that holds the UID.
 	Name string
 }
 
+// Error implements error.
 func (e *ConflictError) Error() string {
 	return fmt.Sprintf("store: uid %q is already used by %q", e.UID, e.Name)
 }

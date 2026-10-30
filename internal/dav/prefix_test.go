@@ -20,6 +20,7 @@ func TestValidPrefix(t *testing.T) {
 		"dav", "/", "/dav/", "//evil.com", "//dav", "/a\r\nb", "/a\x00b", "/a\x7fb", "/my dav",
 		"/./dav", "/dav/../x", "/dav/.", "/a//b", "/d%61v", "/dav?x", "/dav#x", `/da\v`,
 		"/dáv", "/a\xffb", "/a;b", "/a:b", "/a@b",
+		"/a$b", "/a&b", "/a+b", "/a=b", "/a!b", "/a'b", "/a(b", "/a)b", "/a*b", "/a,b",
 	}
 	for _, p := range invalid {
 		err := ValidPrefix(p)

@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Package groupkit is a toolkit for calendars, contacts and tasks: CalDAV and
-// CardDAV servers, iCalendar and vCard handling, and storage you can embed in
-// your own service.
+// Package groupkit is a toolkit for calendars and contacts: CalDAV and CardDAV
+// servers, iCalendar and vCard handling, and storage you can embed in your own
+// service.
 //
 // The module is split into packages so a program imports only what it needs:
 //
@@ -28,10 +28,11 @@
 //	})
 //	mux := http.NewServeMux()
 //	mux.Handle("/dav/", srv.Handler())
+//	mux.Handle("/dav", srv.Handler())
 //	mux.Handle("/.well-known/carddav", srv.WellKnown())
 //	mux.Handle("/.well-known/caldav", srv.WellKnown())
 //
-// The package example is a complete, compiled version of this.
+// ExampleNewServer is a complete, compiled version of this.
 //
 // Address books live under Prefix + "/addressbooks/" and calendars under
 // Prefix + "/calendars/". Config.DisableAddressBooks and
@@ -116,8 +117,11 @@ type Config struct {
 	// Disabling both protocols is an error.
 	DisableCalendars bool
 
-	// Logger receives server faults: method, kind of resource and error,
-	// never credentials, headers or query strings. Nil discards them.
+	// Logger receives server faults and warnings. An entry has the request
+	// method or the collection name, the resource path or the object name
+	// where there is one, and the error. Collection and object names are
+	// chosen by clients and can contain personal data. Entries never have
+	// bodies, credentials, headers or query strings. Nil discards them.
 	Logger *slog.Logger
 }
 

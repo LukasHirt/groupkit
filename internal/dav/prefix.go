@@ -6,7 +6,6 @@ package dav
 
 import (
 	"fmt"
-	"net/url"
 	"path"
 	"strings"
 )
@@ -15,9 +14,8 @@ import (
 // valid. Any other must start with a single slash, must not end with one, and
 // must be a clean path of plain ASCII segments: what the operator writes is
 // exactly what appears in a request's escaped path, and it can never be read
-// as a host ("//host"), a query, a fragment or an escape. Each segment must
-// be left unchanged by url.PathEscape, which rejects spaces, "%", "?", "#",
-// ";", ":", "@", control characters and non-ASCII text.
+// as a host ("//host"), a query, a fragment or an escape. Each segment may
+// contain only ASCII letters, digits and "-", ".", "_" and "~".
 func ValidPrefix(p string) error {
 	if p == "" {
 		return nil
@@ -33,9 +31,15 @@ func ValidPrefix(p string) error {
 		return fmt.Errorf("prefix %q must be a clean path", p)
 	}
 	for _, seg := range strings.Split(p[1:], "/") {
-		if url.PathEscape(seg) != seg || strings.ContainsAny(seg, ";:@") {
+		if strings.ContainsFunc(seg, func(r rune) bool { return !unreserved(r) }) {
 			return fmt.Errorf("prefix %q must contain only unreserved ASCII path characters", p)
 		}
 	}
 	return nil
+}
+
+// unreserved reports whether r is an ASCII letter, digit or one of "-._~".
+func unreserved(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' ||
+		r == '-' || r == '.' || r == '_' || r == '~'
 }

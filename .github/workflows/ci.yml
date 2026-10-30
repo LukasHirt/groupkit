@@ -35,6 +35,39 @@ jobs:
       - run: go vet ./...
       - run: go test ./... -race -cover
 
+  fuzz:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # Runs every fuzz target for a few seconds. A crash fails the job and the
+      # input that caused it is uploaded from testdata/fuzz.
+      - name: Fuzz every target briefly
+        run: |
+          status=0
+          for pkg in $(go list ./...); do
+            if ! listed=$(go test -list '^Fuzz' "$pkg" 2>&1); then
+              echo "== $pkg does not build"
+              echo "$listed"
+              status=1
+              continue
+            fi
+            for target in $(echo "$listed" | grep '^Fuzz' || true); do
+              echo "== $pkg $target"
+              go test "$pkg" -run '^$' -fuzz "^${target}\$" -fuzztime 10s || status=1
+            done
+          done
+          exit $status
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: fuzz-crashers
+          path: "**/testdata/fuzz/**"
+          if-no-files-found: ignore
+
   vulncheck:
     runs-on: ubuntu-latest
     steps:

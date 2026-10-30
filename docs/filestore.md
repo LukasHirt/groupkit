@@ -13,6 +13,9 @@ crash, and what an operator can do when something is wrong.
 
 ## What it guarantees
 
+<!-- claim: TestReopenKeepsEverything -->
+<!-- claim: TestReopenContinuesRevisions -->
+<!-- claim: TestGetObjectDetectsChangedFile -->
 - Every object is a file that holds exactly the bytes the client sent. You
   can read, copy and back up the files with ordinary tools.
 - A write that returned without an error is on disk. The store flushes the
@@ -54,8 +57,12 @@ because the store cannot lock the directory there.
 
 ## Directory layout
 
+<!-- claim: TestOpenCreatesLayout -->
+<!-- claim: TestObjectFilesOnDisk -->
+The tree and the samples below come from a real run of the store.
+
 A calendar `work` owned by `alice@example.com`, holding two events named
-`standup.ics` and `Review 1.ics`, looks like this:
+`standup.ics` and `Review 1.ics`, looks like this on disk:
 
 ```
 data/
@@ -95,6 +102,9 @@ directory or file name.
 
 ## How names become file names
 
+<!-- claim: TestFileNameExamples -->
+<!-- claim: TestFileNameLongNamesAreHashed -->
+<!-- claim: TestFileNameIsSafeAndInjective -->
 Owner, collection and object names are turned into file names by one rule.
 Two different names never get the same file name, even on a file system that
 ignores case.
@@ -130,11 +140,11 @@ one name.
 
 ```json
 {
-  "ID": "e6421d4648215978fdf6a55e0f33236b",
+  "ID": "57ff7ccc380aed364c51002f525fa4ae",
   "Owner": "alice@example.com",
   "Kind": "calendar",
   "Name": "work",
-  "Created": "2026-10-29T16:20:32.430729Z",
+  "Created": "2026-10-30T02:54:24.160868Z",
   "Props": {
     "DisplayName": "Work",
     "Description": "",
@@ -166,13 +176,14 @@ revision of the last log record.
 
 ## The change log
 
+<!-- claim: TestRecordRoundTrip -->
 `log` has one JSON object per line. Each line records one write:
 
 ```
-{"r":1,"n":"standup.ics","e":"e7b90ba593ee6a70c470f4e0fdd2d032","u":"standup@example.com","s":96,"m":1793290832460697000}
-{"r":2,"n":"Review 1.ics","e":"9f7cb79e5d5697d152e7bce8401be284","u":"Review-1","s":85,"m":1793290832475846000}
-{"r":3,"n":"standup.ics","d":true,"m":1793290832489821000}
-{"r":4,"n":"standup.ics","e":"e7b90ba593ee6a70c470f4e0fdd2d032","u":"standup@example.com","s":96,"m":1793290832494229000}
+{"r":1,"n":"standup.ics","e":"765a01ec7fb186d0caf36937b06173a3","u":"standup@example.com","s":200,"m":1793328864181082000}
+{"r":2,"n":"Review 1.ics","e":"3a66e59a11366d34a896baa7d2e2f440","u":"Review-1","s":178,"m":1793328864194581000}
+{"r":3,"n":"standup.ics","d":true,"m":1793328864211046000}
+{"r":4,"n":"standup.ics","e":"765a01ec7fb186d0caf36937b06173a3","u":"standup@example.com","s":200,"m":1793328864219978000}
 ```
 
 | Key | Meaning |
@@ -196,6 +207,8 @@ raise the revision without adding a line.
 
 ## Write order
 
+<!-- claim: TestFailedLogAppendLeavesDataUntouched -->
+<!-- claim: TestPutObjectFailedDataWriteChangesNothing -->
 A put happens in this order, with the collection locked:
 
 1. Append the record to `log` and flush it to disk.
@@ -233,6 +246,10 @@ undoes the record from step 1.
 
 ## What happens after a crash
 
+<!-- claim: TestRecoverTornLastLine -->
+<!-- claim: TestRecoverRollsBackCreate -->
+<!-- claim: TestRecoverKeepsFinishedWrite -->
+<!-- claim: TestRecoverFinishesDelete -->
 Recovery runs every time a collection is loaded. It reads the log, decides
 what to do about the last line, and checks every live object against its
 file. A file passes when its size matches the record and its modification
@@ -262,6 +279,7 @@ data.
 
 ### Known limit
 
+<!-- claim: TestRecoverRollsBackCreate -->
 If the newest record of a collection creates an object and that object's
 file is lost later, the disk looks exactly like a create that never finished.
 The store rolls the record back, and the object disappears without an error.
@@ -272,6 +290,10 @@ flight and it is checked against the disk alone.
 
 ## When a collection refuses to load
 
+<!-- claim: TestMissingObjectFileRefusesToLoad -->
+<!-- claim: TestModifiedFileRefusesToLoad -->
+<!-- claim: TestCorruptMiddleLineRefusesToLoad -->
+<!-- claim: TestListCollectionsSkipsCorruptCollection -->
 "Refuse to load" means every call on that collection returns an error that
 wraps `ErrCorrupt` and names the collection directory and the object.
 `ListCollections` leaves the collection out and reports it to the logger set
@@ -305,6 +327,7 @@ removed by hand. Keep the revisions increasing.
 
 ## Locking
 
+<!-- claim: TestOpenSecondStoreIsRefused -->
 `Open` takes an exclusive, non-blocking `flock` lock on `lock` in the root
 directory and holds it until `Close`. A second `Open` on the same directory
 returns `ErrLocked`, whether it comes from another process or from the same
@@ -320,6 +343,8 @@ collection run in parallel. Different collections do not block each other.
 
 ## Compaction and the journal limit
 
+<!-- claim: TestCompactionKeepsState -->
+<!-- claim: TestJournalLimit -->
 The change journal keeps the newest records of each collection, up to the
 limit set with `WithMaxJournal` (10000 by default). When a write pushes the
 journal past the limit, the oldest records leave it and `Floor` rises to the
@@ -347,6 +372,7 @@ limit. The limit is a minimum.
 
 ## Permissions
 
+<!-- claim: TestOpenCreatesLayout -->
 The store creates directories with mode `0700` and files with mode `0600`,
 so only the user the program runs as can read the data. The process umask
 can only make these stricter. Run the program as a dedicated user that owns
@@ -364,12 +390,18 @@ crash would.
 To restore, put the directory back and start the program. The `lock` file
 can be copied along; it holds no state.
 
-## format-version
+## Upgrading and `format-version`
 
 The root holds a file `format-version` with the content `1` and a newline.
 `Open` writes it into a new directory and refuses to open a directory with
 any other value, so a build never reads a layout it does not understand. Do
 not edit it.
+
+<!-- claim: TestOpenRejectsUnknownFormat -->
+A build that does not know the number in a directory returns an error from
+`Open` and changes nothing. Before you run a different build of your program
+on an existing data directory, stop the old one and keep a copy of the
+directory, as described under "Backing up".
 
 ## Options
 
@@ -392,6 +424,8 @@ The store also returns the errors defined by the `store` package, such as
 
 ## Limits
 
+<!-- claim: TestValidateName -->
+<!-- claim: TestValidateOwner -->
 - Collection and object names can be up to 255 bytes, and an owner up to
   1024 bytes, as `store.ValidateName` and `store.ValidateOwner` allow. Long
   names are stored under a hashed file name, so the file system's own limit
@@ -402,6 +436,6 @@ The store also returns the errors defined by the `store` package, such as
 - A loaded collection keeps its log file open. A program that touches
   thousands of collections needs a file descriptor limit to match.
 - A collection is loaded while the store's map of collections is locked, so
-  one slow load delays other requests. This is known and will be improved.
+  one slow load delays other requests. This is a known limit.
 - Every write flushes to disk before it returns. There is no option to trade
   that for speed.

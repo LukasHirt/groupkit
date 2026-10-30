@@ -11,13 +11,14 @@ import (
 	"net/http/httptest"
 
 	"github.com/LukasHirt/groupkit"
+	"github.com/LukasHirt/groupkit/store"
 	"github.com/LukasHirt/groupkit/store/memory"
 )
 
 // Serve address books and calendars from an in-memory store. A real program
 // would pass the handlers to http.ListenAndServe; the example sends requests
 // straight to the mux instead.
-func Example() {
+func ExampleNewServer() {
 	st := memory.New()
 
 	// The server does not authenticate anyone. These stand-ins treat the
@@ -54,6 +55,7 @@ func Example() {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/dav/", srv.Handler())
+	mux.Handle("/dav", srv.Handler())
 	mux.Handle("/.well-known/carddav", srv.WellKnown())
 	mux.Handle("/.well-known/caldav", srv.WellKnown())
 
@@ -73,7 +75,9 @@ func Example() {
 		return w
 	}
 
-	w := send("GET", "/.well-known/caldav", "")
+	w := send("PROPFIND", "/dav/", "alice")
+	fmt.Println("root:", w.Code)
+	w = send("GET", "/.well-known/caldav", "")
 	fmt.Println("well-known:", w.Code, w.Header().Get("Location"))
 	w = send("PROPFIND", "/dav/calendars/alice/personal/", "alice")
 	fmt.Println("alice, her calendar:", w.Code)
@@ -85,9 +89,39 @@ func Example() {
 	fmt.Println("nobody:", w.Code, w.Header().Get("WWW-Authenticate"))
 
 	// Output:
+	// root: 207
 	// well-known: 301 /dav/
 	// alice, her calendar: 207
 	// alice, her address book: 207
 	// bob, alice's calendar: 403
 	// nobody: 401 Basic realm="example"
+}
+
+// Give a new user a calendar and an address book, so that clients find
+// somewhere to save their first event and contact. Calling it again changes
+// nothing.
+func ExampleEnsureDefaultCollections() {
+	st := memory.New()
+	ctx := context.Background()
+
+	for range 2 {
+		if err := groupkit.EnsureDefaultCollections(ctx, st, "alice"); err != nil {
+			fmt.Println(err)
+			return
+		}
+	}
+
+	for _, kind := range []store.Kind{store.KindAddressBook, store.KindCalendar} {
+		cols, err := st.ListCollections(ctx, "alice", kind)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		for _, c := range cols {
+			fmt.Printf("%s: %s (%s)\n", kind, c.Ref.Name, c.Props.DisplayName)
+		}
+	}
+	// Output:
+	// addressbook: contacts (Contacts)
+	// calendar: personal (Personal)
 }

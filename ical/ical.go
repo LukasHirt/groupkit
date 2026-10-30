@@ -29,9 +29,12 @@ var (
 // Property is one content line of a component. Name and parameter names are
 // upper-case. Value is the text as it appears on the line, still escaped.
 type Property struct {
-	Name   string
+	// Name is the property name in upper case.
+	Name string
+	// Params maps each upper-case parameter name to its values.
 	Params map[string][]string
-	Value  string
+	// Value is the text as written on the line, still escaped.
+	Value string
 }
 
 // Text returns the value with backslash escapes resolved: \\, \, and \; stand
@@ -60,8 +63,11 @@ func (p Property) Text() string {
 
 // Component is a BEGIN/END block with its properties and nested components.
 type Component struct {
-	Name     string
-	Props    []Property
+	// Name is the component name in upper case, such as VEVENT.
+	Name string
+	// Props are the component's properties in the order they appear.
+	Props []Property
+	// Children are the nested components.
 	Children []*Component
 }
 
