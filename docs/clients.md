@@ -41,11 +41,18 @@ occurrence, an all-day event, UTF-8 text, conditional updates and deletes. Thund
 syncs with `sync-collection` and multiget reports, and the server answered with no
 errors. The run needs the application, so it is not part of CI.
 
+Also verified, by hand: Apple Contacts and Apple Calendar on macOS 26.6, against a
+server built on this package behind HTTPS with a certificate the Mac trusts. In Contacts
+a new contact, a renamed contact and a deleted contact each reached the server as the
+matching request, and Thunderbird showed each change once. In Calendar the calendar
+syncs, and creating an event and editing an event both work. Nothing about Apple was
+scripted, so it is not part of CI.
+
 None of the following has been run against the server. Their requests are
 standard and the server is expected to work with them, but that is not
-verified: Apple Calendar and Apple Contacts, DAVx5 and Evolution. Everything below
-about those clients describes what to enter and what the server is built to answer. It
-is not a record of a tested setup.
+verified: DAVx5 and Evolution. Everything below about those clients describes
+what to enter and what the server is built to answer. It is not a record of a
+tested setup.
 
 ## Start the example server
 
@@ -91,13 +98,28 @@ reports that the server does not support the item type.
 
 ### Apple Calendar and Apple Contacts
 
-Not yet verified. Add an account of the type "Other", then "CalDAV account" or
-"CardDAV account". Choose manual setup, and enter the user name, the password,
-and the server address `https://dav.example.com/dav/principals/demo/`. If
-automatic setup is offered, the host name alone should work through the
-well-known URLs. The server does not implement scheduling, so invitations are
-not sent and Calendar shows attendees as plain data. Reminders (task lists)
-cannot be created.
+Verified with macOS 26.6, by hand. Add an account of the type "Other", then
+"CalDAV account" or "CardDAV account". Choose manual setup and enter the user name,
+the password and the server address. Entering the host name alone worked when the
+server also answers the well-known URLs. Without that, use
+`https://dav.example.com/dav/principals/demo/`.
+
+macOS needs HTTPS with a certificate it trusts, and the certificate must allow server
+authentication (`extendedKeyUsage=serverAuth`). When the certificate stopped being
+trusted, sync failed with a certificate error until it was trusted again. In the one
+test with a plain HTTP address, macOS sent no request to it.
+
+Contacts offers New Contact and New Group in the account only when the address book
+reports the full privilege set. The server does, since v0.1.1. Before that, Contacts
+treated the account as read-only: it did not offer New Contact, and every edit created a
+second card.
+
+A group made in Apple Contacts is stored as a card with
+`X-ADDRESSBOOKSERVER-KIND:group`, and the server keeps it as sent. Thunderbird has no
+group support and shows such a card as a contact with a garbled name.
+
+The server does not implement scheduling, so invitations are not sent and Calendar
+shows attendees as plain data. Reminders (task lists) cannot be created.
 
 ### DAVx5
 
