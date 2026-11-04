@@ -42,7 +42,7 @@ Common types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `ci`, `build`.
 
 Releases are cut with [release-please](https://github.com/googleapis/release-please).
 It reads the Conventional Commit messages on `main` and keeps one pull request
-open, titled `chore(main): release X.Y.Z`, that holds the next version and the
+open, titled `chore: release X.Y.Z`, that holds the next version and the
 new `CHANGELOG.md` entries. Merging that pull request tags the release and
 publishes it on GitHub. Don't edit `CHANGELOG.md` or create tags by hand.
 

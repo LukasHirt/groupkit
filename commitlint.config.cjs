@@ -10,6 +10,6 @@ module.exports = {
   ignores: [
     (message) => /^Signed-off-by: dependabot\[bot\]/m.test(message),
     // The release pull request commit lists every change with its compare link.
-    (message) => /^chore\(main\): release \d/.test(message),
+    (message) => /^chore: release \d/.test(message),
   ],
 };
