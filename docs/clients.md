@@ -32,11 +32,20 @@ principal and calendars, creates and deletes a calendar, saves, edits and
 deletes events, runs a time-range search, expands a recurring event and syncs
 with `sync-collection`.
 
+Also verified, by hand with the scripts in `test/thunderbird`: Thunderbird 159.0 on
+macOS against the example server. The scripts use Thunderbird's own code to add the
+address book and the calendar, then create, edit and delete contacts and events in both
+directions and compare what each side holds. 27 checks passed and none failed. They cover
+a contact and an event with a time zone, recurrence, an alarm and an attendee, a moved
+occurrence, an all-day event, UTF-8 text, conditional updates and deletes. Thunderbird
+syncs with `sync-collection` and multiget reports, and the server answered with no
+errors. The run needs the application, so it is not part of CI.
+
 None of the following has been run against the server. Their requests are
 standard and the server is expected to work with them, but that is not
-verified: Thunderbird, Apple Calendar and Apple Contacts, DAVx5 and Evolution. Everything below about those clients describes
-what to enter and what the server is built to answer. It is not a record of a
-tested setup.
+verified: Apple Calendar and Apple Contacts, DAVx5 and Evolution. Everything below
+about those clients describes what to enter and what the server is built to answer. It
+is not a record of a tested setup.
 
 ## Start the example server
 
@@ -72,12 +81,13 @@ The user name is `demo` and the password is the value of `GROUPKIT_PASSWORD`.
 
 ### Thunderbird
 
-Not yet verified. For calendars, choose New Calendar, On the Network, and
+Verified with Thunderbird 159 (see `test/thunderbird`). For calendars, choose New Calendar, On the Network, and
 enter the user name and the calendar address
 `https://dav.example.com/dav/calendars/demo/personal/`. For contacts, choose New
 CardDAV Address Book and enter the user name and the server address
 `https://dav.example.com/dav/`. The server stores events only, so there are no task
-lists to subscribe to.
+lists to subscribe to, and Thunderbird refuses to create a task in these calendars: it
+reports that the server does not support the item type.
 
 ### Apple Calendar and Apple Contacts
 
