@@ -18,9 +18,15 @@ const vcardContentType = "text/vcard; charset=utf-8"
 
 // Privileges granted per kind of resource. The engine does no per-object
 // access control, so these describe what the endpoint supports.
+//
+// The home and the address book both report the full set, including the
+// aggregate "all". With narrower sets (read and bind on the home, no "all" on
+// the book) Apple Contacts offered no new contact or group in the account and
+// saved an edited contact as a new card instead of updating it.
 var (
-	homePrivileges   = []xml.Name{dav.Read, dav.Bind}
-	bookPrivileges   = []xml.Name{dav.Read, dav.Write, dav.WriteProperties, dav.WriteContent, dav.Bind, dav.Unbind}
+	fullPrivileges   = []xml.Name{dav.Read, dav.All, dav.Write, dav.WriteProperties, dav.WriteContent, dav.Bind, dav.Unbind}
+	homePrivileges   = fullPrivileges
+	bookPrivileges   = fullPrivileges
 	objectPrivileges = []xml.Name{dav.Read, dav.Write, dav.WriteContent}
 )
 

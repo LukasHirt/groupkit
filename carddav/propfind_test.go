@@ -183,7 +183,7 @@ func TestPropfindHome(t *testing.T) {
 	for _, p := range r.must(t, 0, dav.CurrentUserPrivilegeSet).Kids(dav.Privilege) {
 		privs = append(privs, p.Children[0].Name.Local)
 	}
-	if strings.Join(privs, ",") != "read,bind" {
+	if strings.Join(privs, ",") != "read,all,write,write-properties,write-content,bind,unbind" {
 		t.Errorf("home privileges = %v", privs)
 	}
 	if n := r.must(t, 0, dav.SupportedReportSet); len(n.Children) != 0 {
@@ -243,7 +243,7 @@ func TestPropfindBookDepth0(t *testing.T) {
 	for _, p := range r.must(t, 0, dav.CurrentUserPrivilegeSet).Kids(dav.Privilege) {
 		privs = append(privs, p.Children[0].Name.Local)
 	}
-	if strings.Join(privs, ",") != "read,write,write-properties,write-content,bind,unbind" {
+	if strings.Join(privs, ",") != "read,all,write,write-properties,write-content,bind,unbind" {
 		t.Errorf("privileges = %v", privs)
 	}
 }
