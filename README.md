@@ -200,7 +200,7 @@ standard requests and should work, but nobody has run them against it yet.
 
 ## Stability
 
-groupkit is pre-1.0 and the API will change. Nothing is released yet.
+groupkit is pre-1.0 and the API can change in any minor version.
 
 ## Development
 

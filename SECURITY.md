@@ -8,9 +8,8 @@ SPDX-License-Identifier: Apache-2.0
 
 ## Supported versions
 
-groupkit is pre-1.0 and moves quickly. Security fixes are only supported
-against the latest commit on `main` until a versioned release process
-exists.
+groupkit is pre-1.0 and moves quickly. Security fixes go into the latest
+release only. Until the first release is tagged, they go into `main`.
 
 ## Reporting a vulnerability
 
