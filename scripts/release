@@ -85,7 +85,8 @@ git cliff --unreleased --tag "$version" --strip header >"$notes" 2>/dev/null
 
 sha=$(git rev-parse HEAD)
 ci=$(gh run list --workflow CI --branch main --commit "$sha" --json conclusion \
-  --jq '.[0].conclusion // "none"' 2>/dev/null || echo unknown)
+  --jq 'if length == 0 then "none" elif (.[0].conclusion // "") == "" then "pending" else .[0].conclusion end' \
+  2>/dev/null || echo unknown)
 
 echo "Release $version${latest:+ (after $latest)} from $(git rev-parse --short HEAD)"
 echo "CI on this commit: $ci"
