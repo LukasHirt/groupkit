@@ -71,6 +71,13 @@ The notes list `feat`, `fix`, `perf`, `revert` and `docs` commits, plus
 as do `ci`, `test`, `build`, `refactor` and `style`, so put what users should
 read about in the PR title of a type that appears. `cliff.toml` has the rules.
 
+Each entry ends with who made the change, like GitHub's generated notes:
+`Add the CalDAV engine (#11) by @LukasHirt`. That is the author's GitHub handle
+plus anyone named in a `Co-authored-by:` trailer, bots included. To credit a
+co-author, keep their trailer in the squash commit message. The script asks
+GitHub for the handles through the `gh` login. Without one, authors appear by
+name instead.
+
 ## Developer Certificate of Origin (DCO)
 
 Every commit must be signed off, certifying you wrote it or otherwise have
