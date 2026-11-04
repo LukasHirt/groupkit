@@ -160,15 +160,20 @@ They cover discovery, reading, writing, deleting and sync. The Python `caldav`
 client (version 3.7.0) runs against the example server in CI
 (`test/pyclient/accept.py`): principal discovery, calendar creation and
 deletion, saving, editing and deleting events, time-range search, recurrence
-expansion and sync-collection. The other clients in the table send the same
-standard requests and should work, but nobody has run them against it yet.
+expansion and sync-collection. Thunderbird 159 was run against the example server by
+the scripts in `test/thunderbird`, which drive Thunderbird's own account setup and sync
+code and check the server in both directions. Contacts and calendar events work,
+including recurrence, time zones, alarms and attendees. Tasks do not, because the server
+stores events only. That run needs the application, so it is not part of CI. The other
+clients in the table send the same standard requests and should work, but nobody has run
+them against it yet.
 
 | Client | Verified | Expected, not yet verified |
 |---|---|---|
 | go-webdav CardDAV client | yes | |
 | go-webdav CalDAV client | yes | |
 | Python `caldav` client (3.7.0) | yes | |
-| Thunderbird (calendars and contacts) | | yes |
+| Thunderbird 159 (calendars and contacts, not tasks) | yes | |
 | Apple Calendar and Apple Contacts | | yes |
 | DAVx5 | | yes |
 | Evolution | | yes |
