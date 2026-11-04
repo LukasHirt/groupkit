@@ -526,9 +526,9 @@ niquests==3.21.2 \
     --hash=sha256:586d6b9475c9018a42f19f1e4688077b8158101cbf40673c63d2c1a096cc7665 \
     --hash=sha256:73e52614a712ee2f4d410bdd29789ca6a4ed031f8961410156e395d42b091208
     # via caldav
-python-dateutil==2.9.0.post0 \
-    --hash=sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3 \
-    --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
+python-dateutil==4.0.0 \
+    --hash=sha256:a5e246f79eb80475e691bf93862cead98decd8a498cf53ba0516fcdc0f50dc1c \
+    --hash=sha256:d7295ff14fdc0f92f662100bfb6c551d160ca090f2939f1ec5b9794265c03f06
     # via
     #   caldav
     #   icalendar
