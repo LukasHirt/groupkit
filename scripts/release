@@ -75,7 +75,18 @@ fi
 notes=$(mktemp)
 message=$(mktemp)
 trap 'rm -f "$notes" "$message"' EXIT
-git cliff --unreleased --tag "$version" --strip header >"$notes" 2>/dev/null
+# The notes credit each change to a GitHub handle, which git-cliff asks GitHub
+# for. Without a GitHub login the commit authors appear by name.
+cliff_args=()
+repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
+token=$(gh auth token 2>/dev/null || true)
+if [ -n "$repo" ] && [ -n "$token" ]; then
+  cliff_args=(--github-repo "$repo")
+else
+  echo "warning: no GitHub login, so the notes name authors instead of linking handles." >&2
+fi
+GITHUB_TOKEN=$token git cliff --unreleased --tag "$version" --strip header \
+  ${cliff_args[@]+"${cliff_args[@]}"} >"$notes" 2>/dev/null
 [ -s "$notes" ] || die "the release notes are empty"
 {
   echo "$version"

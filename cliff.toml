@@ -6,13 +6,43 @@
 # version and to write the notes into the tag message.
 
 [changelog]
+# Each entry ends with who made the change, like GitHub's generated notes: the
+# author's GitHub handle (the script asks GitHub for it, and the commit author's
+# name stands in when it can't) and anyone named in a Co-authored-by trailer.
+# A co-author's handle is read from a users.noreply.github.com address, and
+# their name is used otherwise. Bots are included.
 body = """
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | striptags | trim }}
 {% for commit in commits %}
-- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
+{% set_global by = [] %}\
+{% set_global handle = "" %}\
+{% if commit.remote is defined and commit.remote.username %}\
+{% set_global handle = commit.remote.username %}\
+{% endif %}\
+{% if handle != "" %}\
+{% set_global by = by | concat(with="@" ~ handle) %}\
+{% elif commit.author.name %}\
+{% set_global by = by | concat(with=commit.author.name) %}\
+{% endif %}\
+{% for footer in commit.footers %}\
+{% if footer.token | lower == "co-authored-by" %}\
+{% if footer.value is containing("@users.noreply.github.com") %}\
+{% set login = footer.value | split(pat="@users.noreply") | first | split(pat="<") | last | split(pat="+") | last %}\
+{% set who = "@" ~ login %}\
+{% else %}\
+{% set who = footer.value | split(pat=" <") | first | trim %}\
+{% endif %}\
+{% set plain = who | trim_start_matches(pat="@") %}\
+{% if plain != commit.author.name and plain != handle and by is not containing(who) %}\
+{% set_global by = by | concat(with=who) %}\
+{% endif %}\
+{% endif %}\
+{% endfor %}\
+- {% if commit.scope and commit.scope != "deps" %}**{{ commit.scope }}:** {% endif %}\
 {% if commit.breaking %}**breaking:** {% endif %}\
 {{ commit.message | upper_first }}\
+{% if by | length > 0 %} by {{ by | join(sep=", ") }}{% endif %}\
 {% endfor %}
 {% endfor %}
 """
@@ -25,6 +55,9 @@ protect_breaking_commits = true
 tag_pattern = "v[0-9].*"
 sort_commits = "oldest"
 commit_preprocessors = [
+  # Dependabot puts "from X to Y" in the pull request title but not in the commit
+  # subject. Move it from the commit body into the subject.
+  { pattern = '^(chore\(deps[^)]*\): Bump \S+)( \(#[0-9]+\))?\n\nBumps \[[^\]]+\]\([^)]*\) from (\S+) to (\S+?)\.\n', replace = "${1} from ${3} to ${4}${2}\n\nBumps from ${3} to ${4}.\n" },
   # Squash merges end the subject with the pull request number.
   { pattern = '\(#([0-9]+)\)', replace = "([#${1}](https://github.com/LukasHirt/groupkit/pull/${1}))" },
 ]
