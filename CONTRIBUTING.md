@@ -40,25 +40,36 @@ Common types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `ci`, `build`.
 
 ## Releases
 
-Releases are cut with [release-please](https://github.com/googleapis/release-please).
-It reads the Conventional Commit messages on `main` and keeps one pull request
-open, titled `chore: release X.Y.Z`, that holds the next version and the
-new `CHANGELOG.md` entries. Merging that pull request tags the release and
-publishes it on GitHub. Don't edit `CHANGELOG.md` or create tags by hand.
+A release is a signed tag, and `scripts/release` creates it:
 
-Before 1.0, a `feat` or a breaking change (`feat!`, or a `BREAKING CHANGE:`
-footer) raises the minor version, and a `fix` raises the patch version.
-`feat`, `fix`, `perf`, `revert`, `docs` and `chore` commits appear in the
-changelog. Dependabot titles dependency updates `chore(deps)`, so they are
-listed under "Dependencies and chores". `refactor`, `test`, `build`, `ci` and
-`style` commits don't appear, so put the user-visible part of a change in the
-PR title, and use `ci` or `build` for housekeeping that users don't need to
-read about.
+```sh
+scripts/release --dry-run   # show the version and the release notes
+scripts/release             # create and push the signed tag
+```
 
-The workflow needs a repository secret named `RELEASE_PLEASE_TOKEN`: a
-fine-grained personal access token for this repository with read and write
-access to contents and pull requests. The default token can open the release
-pull request, but CI doesn't run on pull requests it opens.
+The script needs [git-cliff](https://git-cliff.org), the GitHub CLI and a GPG
+or SSH signing key that GitHub shows as verified. Run it on an up-to-date
+`main` with a clean working tree and passing CI.
+
+It reads the commits since the last tag. Before 1.0, a `feat` or a breaking
+change (`feat!`, or a `BREAKING CHANGE:` footer) raises the minor version, and
+a `fix`, `perf` or `revert` raises the patch version. `chore`, `ci`, `docs`,
+`test`, `build`, `refactor` and `style` commits don't release anything on their
+own, and the script stops if nothing else is pending. To pick a version
+yourself, pass it (`scripts/release v0.3.0`). The script asks you to confirm
+when it differs from the suggestion.
+
+The release notes go into the tag message, so the notes you read in the dry
+run are the ones that get published. Pushing the tag starts the Release
+workflow, which creates the GitHub release from that message. It refuses
+lightweight tags and tags whose signature GitHub can't verify. To publish a
+release for a tag that already exists, run the workflow by hand and give it
+the tag name.
+
+The notes list `feat`, `fix`, `perf`, `revert` and `docs` commits, plus
+`chore(deps)` commits under "Dependencies". Other `chore` commits stay out,
+as do `ci`, `test`, `build`, `refactor` and `style`, so put what users should
+read about in the PR title of a type that appears. `cliff.toml` has the rules.
 
 ## Developer Certificate of Origin (DCO)
 

@@ -4,52 +4,46 @@
 
 name: Release
 
+# scripts/release pushes a signed tag whose message holds the release notes.
+# This workflow publishes the GitHub release from it. Run it by hand with a tag
+# name to publish a release for a tag that already exists.
 on:
   push:
-    branches: [main]
+    tags: ["v[0-9]*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to publish
+        required: true
 
 permissions:
   contents: read
 
-concurrency:
-  group: release
-  cancel-in-progress: false
-
 jobs:
-  release-please:
+  release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      # The token is a fine-grained personal access token. Pull requests opened
-      # with the default token do not start the CI workflow.
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
-        with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
-      # release-please can't sign off its commit, and the DCO check requires a
-      # sign-off. The commit author is the owner of the token, so the sign-off
-      # carries the author's own name and email.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
-      - name: Sign off the release commit
+      - name: Publish the release from the signed tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          branch=release-please--branches--main
-          if ! git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
-            echo "No release pull request is open."
-            exit 0
+          ref=$(gh api "repos/$GH_REPO/git/ref/tags/$TAG")
+          if [ "$(jq -r .object.type <<<"$ref")" != tag ]; then
+            echo "::error::$TAG is a lightweight tag. Create it with scripts/release."
+            exit 1
           fi
-          git fetch --quiet origin "$branch"
-          tip=$(git rev-parse FETCH_HEAD)
-          git checkout --quiet -B "$branch" "$tip"
-          message=$(git log -1 --format=%B)
-          case "$message" in
-            *"Signed-off-by: "*)
-              echo "The release commit is already signed off."
-              exit 0
-              ;;
-          esac
-          git config user.name "$(git log -1 --format=%an)"
-          git config user.email "$(git log -1 --format=%ae)"
-          git commit --quiet --amend --signoff --no-edit
-          git push --force-with-lease="$branch:$tip" origin "$branch"
+          tag=$(gh api "repos/$GH_REPO/git/tags/$(jq -r .object.sha <<<"$ref")")
+          if [ "$(jq -r .verification.verified <<<"$tag")" != true ]; then
+            echo "::error::The signature of $TAG is not verified."
+            exit 1
+          fi
+          # Drop the first line (the version) and the blank line after it, and
+          # any signature block the API adds to the message.
+          jq -r .message <<<"$tag" | tail -n +3 | sed '/^-----BEGIN .* SIGNATURE-----$/,$d' >notes.md
+          flags=()
+          case "$TAG" in *-*) flags+=(--prerelease) ;; esac
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file notes.md "${flags[@]}"

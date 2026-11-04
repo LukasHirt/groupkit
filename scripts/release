@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 groupkit contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Creates and pushes the signed tag for the next release.
+#
+# The version comes from the commits since the last tag (see cliff.toml), and
+# the release notes go into the tag message. Pushing the tag starts the
+# Release workflow, which publishes the GitHub release from that message.
+#
+# Usage: scripts/release [--dry-run] [vX.Y.Z]
+#
+# Without a version the script uses the one git-cliff suggests. A different
+# version is accepted only if you confirm it.
+
+set -euo pipefail
+
+die() {
+  echo "error: $*" >&2
+  exit 1
+}
+
+dry_run=false
+version=""
+for arg in "$@"; do
+  case "$arg" in
+    -n | --dry-run) dry_run=true ;;
+    -h | --help)
+      sed -n '8,16p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    v*) version=$arg ;;
+    *) die "unknown argument: $arg (see --help)" ;;
+  esac
+done
+
+for tool in git git-cliff gh; do
+  command -v "$tool" >/dev/null || die "$tool is required"
+done
+
+cd "$(git rev-parse --show-toplevel)"
+
+[ "$(git branch --show-current)" = main ] || die "release from the main branch"
+[ -z "$(git status --porcelain)" ] || die "the working tree has uncommitted changes"
+git fetch --quiet origin main 'refs/tags/*:refs/tags/*'
+[ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] ||
+  die "main is not at origin/main: pull or push first"
+
+latest=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
+suggested=$(git cliff --bumped-version 2>/dev/null | tail -n 1)
+[ -n "$suggested" ] || die "git-cliff could not suggest a version"
+if [ -n "$latest" ] && [ "$suggested" = "$latest" ]; then
+  die "nothing to release since $latest: only commits that do not change the version"
+fi
+
+if [ -z "$version" ]; then
+  version=$suggested
+elif [ "$version" != "$suggested" ]; then
+  echo "git-cliff suggests $suggested, you asked for $version."
+  read -r -p "Use $version? [y/N] " answer || answer=n
+  [ "$answer" = y ] || [ "$answer" = Y ] || die "cancelled"
+fi
+
+[[ $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] ||
+  die "$version is not a version like v1.2.3"
+if git rev-parse --quiet --verify "refs/tags/$version" >/dev/null; then
+  die "the tag $version already exists"
+fi
+if [ -n "$latest" ] &&
+  [ "$(printf '%s\n%s\n' "$latest" "$version" | sort -V | tail -n 1)" != "$version" ]; then
+  die "$version is not newer than $latest"
+fi
+
+notes=$(mktemp)
+message=$(mktemp)
+trap 'rm -f "$notes" "$message"' EXIT
+git cliff --unreleased --tag "$version" --strip header >"$notes" 2>/dev/null
+[ -s "$notes" ] || die "the release notes are empty"
+{
+  echo "$version"
+  echo
+  cat "$notes"
+} >"$message"
+
+sha=$(git rev-parse HEAD)
+ci=$(gh run list --workflow CI --branch main --commit "$sha" --json conclusion \
+  --jq '.[0].conclusion // "none"' 2>/dev/null || echo unknown)
+
+echo "Release $version${latest:+ (after $latest)} from $(git rev-parse --short HEAD)"
+echo "CI on this commit: $ci"
+echo
+cat "$notes"
+echo
+
+if [ "$ci" != success ]; then
+  if $dry_run; then
+    echo "warning: CI has not succeeded on this commit."
+  else
+    die "CI has not succeeded on this commit"
+  fi
+fi
+
+if $dry_run; then
+  echo "Dry run: no tag was created."
+  exit 0
+fi
+
+read -r -p "Create and push the signed tag $version? [y/N] " answer || answer=n
+[ "$answer" = y ] || [ "$answer" = Y ] || die "cancelled"
+
+git tag --sign --cleanup=whitespace --file "$message" "$version"
+git push origin "refs/tags/$version"
+echo "Pushed $version. The Release workflow publishes the GitHub release."
