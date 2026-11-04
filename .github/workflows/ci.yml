@@ -44,9 +44,29 @@ jobs:
         with:
           go-version-file: go.mod
       # Runs every fuzz target for a few seconds. A crash fails the job and the
-      # input that caused it is uploaded from testdata/fuzz.
+      # failing input is printed in the log.
       - name: Fuzz every target briefly
         run: |
+          # When -fuzztime runs out, go test can exit with "context deadline
+          # exceeded" although nothing failed (golang/go#75804, golang/go#72104).
+          # That case is retried once. A real failure writes an input file and
+          # is never retried.
+          run_target() {
+            local pkg=$1 target=$2 log attempt
+            log=$(mktemp)
+            for attempt in 1 2; do
+              if go test "$pkg" -run '^$' -fuzz "^${target}\$" -fuzztime 10s >"$log" 2>&1; then
+                cat "$log"
+                return 0
+              fi
+              cat "$log"
+              if [ "$attempt" = 2 ] || grep -q 'Failing input written to' "$log" ||
+                ! grep -q 'context deadline exceeded' "$log"; then
+                return 1
+              fi
+              echo "== $pkg $target: deadline error without a failing input, retrying"
+            done
+          }
           status=0
           for pkg in $(go list ./...); do
             if ! listed=$(go test -list '^Fuzz' "$pkg" 2>&1); then
@@ -57,8 +77,12 @@ jobs:
             fi
             for target in $(echo "$listed" | grep '^Fuzz' || true); do
               echo "== $pkg $target"
-              go test "$pkg" -run '^$' -fuzz "^${target}\$" -fuzztime 10s || status=1
+              run_target "$pkg" "$target" || status=1
             done
+          done
+          for input in $(git ls-files --others --exclude-standard -- '*testdata/fuzz/*'); do
+            echo "== failing input $input"
+            cat "$input"
           done
           exit $status
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
