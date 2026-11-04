@@ -164,9 +164,12 @@ expansion and sync-collection. Thunderbird 159 was run against the example serve
 the scripts in `test/thunderbird`, which drive Thunderbird's own account setup and sync
 code and check the server in both directions. Contacts and calendar events work,
 including recurrence, time zones, alarms and attendees. Tasks do not, because the server
-stores events only. That run needs the application, so it is not part of CI. The other
-clients in the table send the same standard requests and should work, but nobody has run
-them against it yet.
+stores events only. That run needs the application, so it is not part of CI. Apple
+Contacts and Apple Calendar on macOS 26.6 were tried by hand against a server built on
+this package, behind HTTPS with a certificate the Mac trusts. Contacts can be created,
+renamed and deleted, and each change reaches Thunderbird. Calendar syncs, and creating and
+editing events works. The other clients in the table send the same standard requests and
+should work, but nobody has run them against it yet.
 
 | Client | Verified | Expected, not yet verified |
 |---|---|---|
@@ -174,7 +177,8 @@ them against it yet.
 | go-webdav CalDAV client | yes | |
 | Python `caldav` client (3.7.0) | yes | |
 | Thunderbird 159 (calendars and contacts, not tasks) | yes | |
-| Apple Calendar and Apple Contacts | | yes |
+| Apple Contacts 26.6 | yes | |
+| Apple Calendar 26.6 (sync, creating and editing events) | yes | |
 | DAVx5 | | yes |
 | Evolution | | yes |
 
