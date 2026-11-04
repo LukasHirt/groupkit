@@ -18,3 +18,7 @@ updates:
     directory: "/test/pyclient"
     schedule:
       interval: "weekly"
+    ignore:
+      # recurring-ical-events requires python-dateutil<3.
+      - dependency-name: "python-dateutil"
+        update-types: ["version-update:semver-major"]
