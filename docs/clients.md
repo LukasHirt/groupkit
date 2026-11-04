@@ -26,10 +26,15 @@ deleting and incremental sync.
 Verified: the go-webdav CardDAV client (`interop_test.go`) and the go-webdav
 CalDAV client (`interop_calendar_test.go`).
 
+Also verified, by the `python-client` job in CI (`test/pyclient/accept.py`): the
+Python `caldav` client 3.7.0 against the example server. It discovers the
+principal and calendars, creates and deletes a calendar, saves, edits and
+deletes events, runs a time-range search, expands a recurring event and syncs
+with `sync-collection`.
+
 None of the following has been run against the server. Their requests are
 standard and the server is expected to work with them, but that is not
-verified: the Python `caldav` client, Thunderbird, Apple Calendar and Apple
-Contacts, DAVx5 and Evolution. Everything below about those clients describes
+verified: Thunderbird, Apple Calendar and Apple Contacts, DAVx5 and Evolution. Everything below about those clients describes
 what to enter and what the server is built to answer. It is not a record of a
 tested setup.
 
