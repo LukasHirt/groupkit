@@ -156,15 +156,18 @@ The packages under `internal/` are not importable.
 
 The go-webdav CardDAV and CalDAV clients have been run against the server by
 tests in this repository (`interop_test.go` and `interop_calendar_test.go`).
-They cover discovery, reading, writing, deleting and sync. The other clients
-in the table send the same standard requests and should work, but nobody has
-run them against it yet.
+They cover discovery, reading, writing, deleting and sync. The Python `caldav`
+client (version 3.7.0) runs against the example server in CI
+(`test/pyclient/accept.py`): principal discovery, calendar creation and
+deletion, saving, editing and deleting events, time-range search, recurrence
+expansion and sync-collection. The other clients in the table send the same
+standard requests and should work, but nobody has run them against it yet.
 
 | Client | Verified | Expected, not yet verified |
 |---|---|---|
 | go-webdav CardDAV client | yes | |
 | go-webdav CalDAV client | yes | |
-| Python `caldav` client | | yes |
+| Python `caldav` client (3.7.0) | yes | |
 | Thunderbird (calendars and contacts) | | yes |
 | Apple Calendar and Apple Contacts | | yes |
 | DAVx5 | | yes |

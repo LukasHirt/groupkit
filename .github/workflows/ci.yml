@@ -102,3 +102,30 @@ jobs:
         with:
           fetch-depth: 0
       - uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6.2.1
+
+  python-client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Install the Python client
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --require-hashes -r test/pyclient/requirements.txt
+      - name: Build the example server
+        run: go build -o "$RUNNER_TEMP/server" ./examples/server
+      - name: Run the client against the server
+        env:
+          GROUPKIT_PASSWORD: ci-check-password-1
+          GROUPKIT_URL: http://127.0.0.1:8080/dav/
+        run: |
+          "$RUNNER_TEMP/server" -addr 127.0.0.1:8080 -data "$RUNNER_TEMP/data" &
+          server=$!
+          trap 'kill $server' EXIT
+          for _ in $(seq 1 50); do
+            curl -s -o /dev/null http://127.0.0.1:8080/ && break
+            sleep 0.2
+          done
+          "$RUNNER_TEMP/venv/bin/python" -I test/pyclient/accept.py
