@@ -18,7 +18,7 @@ func TestValidPrefix(t *testing.T) {
 	}
 	invalid := []string{
 		"dav", "/", "/dav/", "//evil.com", "//dav", "/a\r\nb", "/a\x00b", "/a\x7fb", "/my dav",
-		"/./dav", "/dav/../x", "/dav/.", "/a//b", "/d%61v", "/dav?x", "/dav#x", `/da\v`,
+		"/./dav", "/dav/../x", "/dav/.", "/a//b", "/d%61v", "/dav?x", "/dav#x", `/da\v`, `/\evil.com`, `/\\evil.com`,
 		"/dáv", "/a\xffb", "/a;b", "/a:b", "/a@b",
 		"/a$b", "/a&b", "/a+b", "/a=b", "/a!b", "/a'b", "/a(b", "/a)b", "/a*b", "/a,b",
 	}
