@@ -4,3 +4,8 @@ version = 1
 path = ["go.mod", "go.sum", "LICENSE"]
 SPDX-FileCopyrightText = "2026 groupkit contributors"
 SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["release-please-config.json", ".release-please-manifest.json", "CHANGELOG.md"]
+SPDX-FileCopyrightText = "2026 groupkit contributors"
+SPDX-License-Identifier = "Apache-2.0"

@@ -38,6 +38,25 @@ Commit messages and PR titles follow [Conventional Commits](https://www.conventi
 
 Common types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `ci`, `build`.
 
+## Releases
+
+Releases are cut with [release-please](https://github.com/googleapis/release-please).
+It reads the Conventional Commit messages on `main` and keeps one pull request
+open, titled `chore(main): release X.Y.Z`, that holds the next version and the
+new `CHANGELOG.md` entries. Merging that pull request tags the release and
+publishes it on GitHub. Don't edit `CHANGELOG.md` or create tags by hand.
+
+Before 1.0, a `feat` or a breaking change (`feat!`, or a `BREAKING CHANGE:`
+footer) raises the minor version, and a `fix` raises the patch version.
+`feat`, `fix`, `perf`, `revert` and `docs` commits appear in the changelog.
+`refactor`, `test`, `build`, `ci`, `chore` and `style` commits don't, so put
+the user-visible part of a change in the PR title.
+
+The workflow needs a repository secret named `RELEASE_PLEASE_TOKEN`: a
+fine-grained personal access token for this repository with read and write
+access to contents and pull requests. The default token can open the release
+pull request, but CI doesn't run on pull requests it opens.
+
 ## Developer Certificate of Origin (DCO)
 
 Every commit must be signed off, certifying you wrote it or otherwise have
