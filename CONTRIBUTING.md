@@ -48,9 +48,12 @@ publishes it on GitHub. Don't edit `CHANGELOG.md` or create tags by hand.
 
 Before 1.0, a `feat` or a breaking change (`feat!`, or a `BREAKING CHANGE:`
 footer) raises the minor version, and a `fix` raises the patch version.
-`feat`, `fix`, `perf`, `revert` and `docs` commits appear in the changelog.
-`refactor`, `test`, `build`, `ci`, `chore` and `style` commits don't, so put
-the user-visible part of a change in the PR title.
+`feat`, `fix`, `perf`, `revert`, `docs` and `chore` commits appear in the
+changelog. Dependabot titles dependency updates `chore(deps)`, so they are
+listed under "Dependencies and chores". `refactor`, `test`, `build`, `ci` and
+`style` commits don't appear, so put the user-visible part of a change in the
+PR title, and use `ci` or `build` for housekeeping that users don't need to
+read about.
 
 The workflow needs a repository secret named `RELEASE_PLEASE_TOKEN`: a
 fine-grained personal access token for this repository with read and write
