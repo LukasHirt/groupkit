@@ -25,6 +25,9 @@ func ValidPrefix(p string) error {
 		return fmt.Errorf("prefix %q must be empty or start with a slash", p)
 	case strings.HasPrefix(p, "//"):
 		return fmt.Errorf("prefix %q must not start with two slashes", p)
+	case strings.HasPrefix(p, `/\`):
+		// Browsers read "/\host" like "//host".
+		return fmt.Errorf("prefix %q must not start with a slash and a backslash", p)
 	case strings.HasSuffix(p, "/"):
 		return fmt.Errorf("prefix %q must not end with a slash", p)
 	case path.Clean(p) != p:
