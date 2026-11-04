@@ -11,11 +11,11 @@
     { "type": "perf", "section": "Performance Improvements" },
     { "type": "revert", "section": "Reverts" },
     { "type": "docs", "section": "Documentation" },
+    { "type": "chore", "section": "Dependencies and chores" },
     { "type": "refactor", "section": "Refactoring", "hidden": true },
     { "type": "test", "section": "Tests", "hidden": true },
     { "type": "build", "section": "Build", "hidden": true },
     { "type": "ci", "section": "CI", "hidden": true },
-    { "type": "chore", "section": "Chores", "hidden": true },
     { "type": "style", "section": "Style", "hidden": true }
   ],
   "packages": {
