@@ -13,7 +13,8 @@ Objects are kept as the bytes the client sent. The library knows nothing about
 accounts or identity systems: it works with owners, collections and objects,
 and your program decides who may see what.
 
-Status: pre-1.0. The API will change.
+The public API is covered by a compatibility promise, described under
+[Stability](#stability).
 
 ## What works
 
@@ -154,6 +155,8 @@ The packages under `internal/` are not importable.
 - [docs/clients.md](docs/clients.md): connecting clients, and `curl` examples.
 - [docs/ical.md](docs/ical.md): what the iCalendar package accepts, how it
   writes it back, how it reads times and time zones, and its limits.
+- [docs/api.md](docs/api.md): the compatibility promise, versioning and the
+  supported sizes.
 
 ## Client compatibility
 
@@ -212,7 +215,14 @@ should work, but nobody has run them against it yet.
 
 ## Stability
 
-groupkit is pre-1.0 and the API can change in any minor version.
+The exported API of the packages in the table above follows semantic
+versioning: a program that builds against a 1.x release builds and behaves the
+same against every later 1.x release, and so does a file store directory.
+[docs/api.md](docs/api.md) lists what the promise covers and what it leaves
+out, the versioning policy, and the sizes the library has been measured at. On
+one 14-core machine with 30,000 events in a calendar, a range query had a p95
+of about 0.6 s, a cold start took under 1 s, and memory stayed between 55 and
+78 MB.
 
 ## Development
 
