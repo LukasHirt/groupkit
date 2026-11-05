@@ -25,7 +25,7 @@ const (
 )
 
 func (s *Server) principalHref(user string) string {
-	return s.prefix + "/principals/" + dav.EscapeHref(user) + "/"
+	return s.principalsRoot + dav.EscapeHref(user) + "/"
 }
 
 func (s *Server) rootHref() string { return s.prefix + "/" }

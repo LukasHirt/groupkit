@@ -51,17 +51,17 @@ var bookReports = []xml.Name{dav.AddressbookQuery, dav.AddressbookMultiget, dav.
 
 // principalHref returns the escaped URL of a user's principal resource.
 func (h *Handler) principalHref(user string) string {
-	return h.prefix + "/principals/" + dav.EscapeHref(user) + "/"
+	return h.principalsRoot + dav.EscapeHref(user) + "/"
 }
 
 // bookHref returns the escaped URL of an address book, with a trailing slash.
 func (h *Handler) bookHref(user, book string) string {
-	return h.prefix + "/addressbooks/" + dav.EscapeHref(user, book) + "/"
+	return h.booksRoot + dav.EscapeHref(user, book) + "/"
 }
 
 // objectHref returns the escaped URL of an object.
 func (h *Handler) objectHref(user, book, name string) string {
-	return h.prefix + "/addressbooks/" + dav.EscapeHref(user, book, name)
+	return h.booksRoot + dav.EscapeHref(user, book, name)
 }
 
 // fixed is a property whose value is already known.

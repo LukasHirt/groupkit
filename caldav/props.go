@@ -73,7 +73,7 @@ var calendarReports = []xml.Name{dav.CalendarQuery, dav.CalendarMultiget, dav.Sy
 
 // principalHref returns the escaped URL of a user's principal resource.
 func (h *Handler) principalHref(user string) string {
-	return h.prefix + "/principals/" + dav.EscapeHref(user) + "/"
+	return h.principalsRoot + dav.EscapeHref(user) + "/"
 }
 
 // calendarHref returns the escaped URL of a calendar, with a trailing slash.

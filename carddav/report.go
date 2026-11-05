@@ -306,7 +306,7 @@ func (h *Handler) bookObjectName(href string, t target) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	rest, ok := strings.CutPrefix(u.EscapedPath(), h.prefix+"/addressbooks/")
+	rest, ok := strings.CutPrefix(u.EscapedPath(), h.booksRoot)
 	if !ok {
 		return "", false
 	}
