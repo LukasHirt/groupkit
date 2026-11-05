@@ -15,7 +15,7 @@ import (
 // syncCollection answers a DAV:sync-collection report (RFC 6578). The
 // DAV:limit element is ignored. The token and delta rules live in
 // dav.AnswerSync, which both engines share.
-func (h *Handler) syncCollection(w http.ResponseWriter, r *http.Request, t target, owner string, root *dav.Node) {
+func (h *Handler) syncCollection(w http.ResponseWriter, r *http.Request, t target, owner string, access store.Access, root *dav.Node) {
 	req, err := dav.ParseSyncRequest(root, propRequestFromNode)
 	if err != nil {
 		dav.WriteErr(w, err)
@@ -26,7 +26,7 @@ func (h *Handler) syncCollection(w http.ResponseWriter, r *http.Request, t targe
 		Ref:     h.bookRef(owner, t.book),
 		HrefFor: func(name string) string { return h.objectHref(t.user, t.book, name) },
 		ResponseFor: func(ctx context.Context, o store.Object, req dav.PropfindRequest) dav.Response {
-			return h.objectResponse(ctx, owner, t.user, t.book, o, req)
+			return h.objectResponse(ctx, owner, t.user, t.book, access, o, req)
 		},
 		Log: h.log,
 	}, req)

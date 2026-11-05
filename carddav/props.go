@@ -16,19 +16,35 @@ import (
 // vcardContentType is the content type of contact objects.
 const vcardContentType = "text/vcard; charset=utf-8"
 
-// Privileges granted per kind of resource. The engine does no per-object
-// access control, so these describe what the endpoint supports.
-//
-// The home and the address book both report the full set, including the
-// aggregate "all". With narrower sets (read and bind on the home, no "all" on
-// the book) Apple Contacts offered no new contact or group in the account and
-// saved an edited contact as a new card instead of updating it.
-var (
-	fullPrivileges   = []xml.Name{dav.Read, dav.All, dav.Write, dav.WriteProperties, dav.WriteContent, dav.Bind, dav.Unbind}
-	homePrivileges   = fullPrivileges
-	bookPrivileges   = fullPrivileges
-	objectPrivileges = []xml.Name{dav.Read, dav.Write, dav.WriteContent}
-)
+// fullPrivileges is the set on the home, which is always the caller's own,
+// and on an address book at full access. It includes the aggregate "all":
+// with narrower sets (read and bind on the home, no "all" on the book) Apple
+// Contacts offered no new contact or group in the account and saved an
+// edited contact as a new card instead of updating it.
+var fullPrivileges = []xml.Name{dav.Read, dav.All, dav.Write, dav.WriteProperties, dav.WriteContent, dav.Bind, dav.Unbind}
+
+// bookPrivileges are the privileges on an address book at an access level:
+// the full set, object writes (write-content, bind, unbind) without
+// write-properties when only objects may be written, and read alone
+// otherwise. The engine does no per-object access control.
+func bookPrivileges(a store.Access) []xml.Name {
+	switch {
+	case a.AllowsPropertyWrites():
+		return fullPrivileges
+	case a.AllowsObjectWrites():
+		return []xml.Name{dav.Read, dav.WriteContent, dav.Bind, dav.Unbind}
+	}
+	return []xml.Name{dav.Read}
+}
+
+// objectPrivileges are the privileges on an object of an address book at an
+// access level.
+func objectPrivileges(a store.Access) []xml.Name {
+	if a.AllowsObjectWrites() {
+		return []xml.Name{dav.Read, dav.Write, dav.WriteContent}
+	}
+	return []xml.Name{dav.Read}
+}
 
 // bookReports are the reports an address book supports.
 var bookReports = []xml.Name{dav.AddressbookQuery, dav.AddressbookMultiget, dav.SyncCollection}
@@ -95,14 +111,15 @@ func (h *Handler) commonProps(user string, privs, reports []xml.Name, types ...x
 // homeResource describes a user's address book home. The URL user is the
 // display name.
 func (h *Handler) homeResource(user string) dav.Resource {
-	props := h.commonProps(user, homePrivileges, nil, dav.Collection)
+	props := h.commonProps(user, fullPrivileges, nil, dav.Collection)
 	props[dav.DisplayName] = text(dav.DisplayName, user)
 	return dav.Resource{Href: h.HomeHref(user), Props: props}
 }
 
-// bookResource describes an address book.
+// bookResource describes an address book. The privileges follow the
+// collection's access level.
 func (h *Handler) bookResource(user string, c store.Collection) dav.Resource {
-	props := h.commonProps(user, bookPrivileges, bookReports, dav.Collection, dav.Addressbook)
+	props := h.commonProps(user, bookPrivileges(c.Access), bookReports, dav.Collection, dav.Addressbook)
 	name := c.Props.DisplayName
 	if name == "" {
 		name = c.Ref.Name
@@ -123,11 +140,12 @@ func (h *Handler) bookResource(user string, c store.Collection) dav.Resource {
 	return dav.Resource{Href: h.bookHref(user, c.Ref.Name), Props: props}
 }
 
-// objectResource describes a contact object from its listing entry. data
-// fetches the object's bytes; it is only called when address-data is asked
-// for by name, so a listing reads no object data.
-func (h *Handler) objectResource(user, book string, o store.Object, data func() ([]byte, error)) dav.Resource {
-	props := h.commonProps(user, objectPrivileges, nil)
+// objectResource describes a contact object from its listing entry. access
+// is the level of its address book. data fetches the object's bytes; it is
+// only called when address-data is asked for by name, so a listing reads no
+// object data.
+func (h *Handler) objectResource(user, book string, access store.Access, o store.Object, data func() ([]byte, error)) dav.Resource {
+	props := h.commonProps(user, objectPrivileges(access), nil)
 	props[dav.DisplayName] = text(dav.DisplayName, o.Name)
 	props[dav.GetETag] = text(dav.GetETag, dav.QuoteETag(o.ETag))
 	props[dav.GetContentType] = text(dav.GetContentType, vcardContentType)
@@ -146,11 +164,12 @@ func (h *Handler) objectResource(user, book string, o store.Object, data func() 
 	return dav.Resource{Href: h.objectHref(user, book, o.Name), Props: props}
 }
 
-// objectResponse builds the PROPFIND response for one object of a book. The
-// object's data is read from the store only if the request names address-data.
-func (h *Handler) objectResponse(ctx context.Context, owner, user, book string, o store.Object, req dav.PropfindRequest) dav.Response {
+// objectResponse builds the PROPFIND response for one object of a book at
+// the given access level. The object's data is read from the store only if
+// the request names address-data.
+func (h *Handler) objectResponse(ctx context.Context, owner, user, book string, access store.Access, o store.Object, req dav.PropfindRequest) dav.Response {
 	ref := store.CollectionRef{Owner: owner, Kind: store.KindAddressBook, Name: book}
-	res := h.objectResource(user, book, o, func() ([]byte, error) {
+	res := h.objectResource(user, book, access, o, func() ([]byte, error) {
 		full, err := h.store.GetObject(ctx, ref, o.Name)
 		if err != nil {
 			h.log.Warn("cannot read object", "collection", book, "error", err)

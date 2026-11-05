@@ -81,6 +81,40 @@ the ones from the CalDAV and CardDAV handlers.
 The same errors exist in package `access`, and `groupkit` re-exports them, so
 a function can return either.
 
+## Access levels
+
+`Authorize` decides whose data a URL reaches. What the caller may then do
+with a collection is the store's say. Every `store.Collection` carries an
+`Access` level, and the server reads it. The stores in this module serve each
+collection to its owner with `store.AccessFull`. A store that serves a
+collection to someone else, under whatever rules your program has, reports a
+narrower level there and refuses writes beyond it with `store.ErrPermission`.
+The server does not need to know why.
+
+<!-- claim: TestPrivilegesByAccessLevel -->
+| Level | The caller may | `current-user-privilege-set` on the collection | On an object |
+|---|---|---|---|
+| `AccessFull` | Read and write objects, change the collection's properties, delete it | `read`, `write`, `write-properties`, `write-content`, `bind`, `unbind`. An address book also lists `all` | `read`, `write`, `write-content` |
+| `AccessObjects` | Read and write objects | `read`, `write-content`, `bind`, `unbind` | `read`, `write`, `write-content` |
+| `AccessRead` | Read | `read` | `read` |
+
+<!-- claim: TestMethodsByAccessLevel -->
+<!-- claim: TestPermissionErrorIs403 -->
+A request the level does not allow gets 403 with a `DAV:error` body naming
+`need-privileges`: `PUT` and `DELETE` of an object below `AccessObjects`, and
+`PROPPATCH`, `MKCALENDAR`, `MKCOL` and `DELETE` of a collection below
+`AccessFull`. A `PUT` is refused before its body is read. The same answer is
+given to `store.ErrPermission` from any store call, so a store may also refuse
+on its own, for example to accept some property changes on a read-only
+collection and refuse the rest. A user's home is always their own and keeps
+its privileges.
+
+<!-- claim: TestReadOnlySyncCollection -->
+<!-- claim: TestClientSeesReadOnlyCollections -->
+`GET`, `PROPFIND`, the reports and `sync-collection` work at every level.
+`storetest.WithAccess` wraps a store so that every collection reports one
+level; that is how these answers are tested.
+
 ## URL layout
 
 With the prefix `/dav`:
@@ -269,7 +303,9 @@ one href.
 <!-- claim: TestPutUIDConflict -->
 <!-- claim: TestReportDispatch -->
 Sharing, invitations, free-busy lookups, quotas and push notifications are not
-implemented, and their properties are reported as absent. Stored objects are
+implemented, and their properties are reported as absent. A store can still
+hand a collection to a caller with less than full access; see Access levels
+above. Stored objects are
 served byte for byte; the server does not convert between vCard versions or
 between iCalendar dialects, and ignores requests for part of an object
 (`expand`, `limit-recurrence-set` and property subsets). It returns the whole

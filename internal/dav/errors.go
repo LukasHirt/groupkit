@@ -24,6 +24,9 @@ var (
 	// CannotModifyProtectedProperty is the RFC 4918 (section 16) precondition for an
 	// attempt to set a property the server controls.
 	CannotModifyProtectedProperty = N(NSDAV, "cannot-modify-protected-property")
+	// NeedPrivileges is the RFC 3744 (section 7.1.1) precondition for a
+	// request the caller's privileges on the resource do not allow.
+	NeedPrivileges = N(NSDAV, "need-privileges")
 
 	// CalNoUIDConflict is the RFC 4791 precondition for a calendar object
 	// whose UID is already used by another resource in the collection.

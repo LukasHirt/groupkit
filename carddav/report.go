@@ -42,18 +42,20 @@ func (h *Handler) report(w http.ResponseWriter, r *http.Request, t target, owner
 		dav.WriteErr(w, dav.BadRequest("malformed XML"))
 		return
 	}
-	// The book must exist whatever the report.
-	if _, err := h.store.GetCollection(r.Context(), h.bookRef(owner, t.book)); err != nil {
+	// The book must exist whatever the report, and its access level sets the
+	// privileges of the objects reported.
+	c, err := h.store.GetCollection(r.Context(), h.bookRef(owner, t.book))
+	if err != nil {
 		h.fail(w, r, t, err)
 		return
 	}
 	switch root.Name {
 	case dav.AddressbookQuery:
-		h.query(w, r, t, owner, root)
+		h.query(w, r, t, owner, c.Access, root)
 	case dav.AddressbookMultiget:
-		h.multiget(w, r, t, owner, root)
+		h.multiget(w, r, t, owner, c.Access, root)
 	case dav.SyncCollection:
-		h.syncCollection(w, r, t, owner, root)
+		h.syncCollection(w, r, t, owner, c.Access, root)
 	default:
 		dav.WriteError(w, dav.Forbidden(dav.SupportedReport))
 	}
@@ -109,7 +111,7 @@ func nresults(root *dav.Node) (n int, ok bool, err error) {
 // query answers an addressbook-query report (RFC 6352 section 8.6). Objects
 // are read and matched while the response streams, one at a time; one that
 // cannot be read or parsed is skipped.
-func (h *Handler) query(w http.ResponseWriter, r *http.Request, t target, owner string, root *dav.Node) {
+func (h *Handler) query(w http.ResponseWriter, r *http.Request, t target, owner string, access store.Access, root *dav.Node) {
 	var flt *vcard.Filter
 	if fn := root.Child(dav.CRFilter); fn != nil {
 		f, err := parseFilter(fn)
@@ -169,7 +171,7 @@ func (h *Handler) query(w http.ResponseWriter, r *http.Request, t target, owner 
 				return dav.Response{}, false
 			}
 		}
-		res := h.objectResource(t.user, t.book, o, func() ([]byte, error) { return data, nil })
+		res := h.objectResource(t.user, t.book, access, o, func() ([]byte, error) { return data, nil })
 		return dav.PropFind(req, res), true
 	}
 
@@ -229,7 +231,7 @@ func errKind(err error) string {
 // multiget answers an addressbook-multiget report (RFC 6352 section 8.7).
 // Only hrefs inside the requested book of the requested user are read; any
 // other href is a 404 response and never reaches the store.
-func (h *Handler) multiget(w http.ResponseWriter, r *http.Request, t target, owner string, root *dav.Node) {
+func (h *Handler) multiget(w http.ResponseWriter, r *http.Request, t target, owner string, access store.Access, root *dav.Node) {
 	hrefs := root.Kids(dav.Href)
 	if len(hrefs) > maxMultigetHrefs {
 		dav.WriteErr(w, dav.BadRequest("too many hrefs"))
@@ -278,7 +280,7 @@ func (h *Handler) multiget(w http.ResponseWriter, r *http.Request, t target, own
 				}
 			default:
 				data := o.Data
-				res := h.objectResource(t.user, t.book, o, func() ([]byte, error) { return data, nil })
+				res := h.objectResource(t.user, t.book, access, o, func() ([]byte, error) { return data, nil })
 				if !yield(dav.PropFind(req, res)) {
 					return
 				}
