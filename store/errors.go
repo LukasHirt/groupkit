@@ -33,6 +33,10 @@ var (
 	// ErrInvalidName is returned for an owner or object or collection name the
 	// store does not accept.
 	ErrInvalidName = errors.New("store: invalid name")
+
+	// ErrPermission is returned when the caller's access to the collection
+	// does not allow the operation. See Access. Nothing was changed.
+	ErrPermission = errors.New("store: permission denied")
 )
 
 // ConflictError reports which object holds the UID that caused ErrUIDConflict.

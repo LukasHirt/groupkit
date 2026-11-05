@@ -10,6 +10,9 @@
 //	func TestConformance(t *testing.T) {
 //		storetest.Run(t, func(t *testing.T) store.Store { return mystore.New(t.TempDir()) })
 //	}
+//
+// [WithAccess] wraps any store so that it reports one access level for every
+// collection, for tests of code that acts on the level.
 package storetest
 
 import (
@@ -51,6 +54,7 @@ func Run(t *testing.T, newStore Factory) {
 		fn   func(*testing.T, Factory)
 	}{
 		{"Collections", testCollections},
+		{"Access", testAccess},
 		{"Objects", testObjects},
 		{"Names", testNames},
 		{"Preconditions", testPreconditions},
@@ -278,6 +282,29 @@ func testCollections(t *testing.T, newStore Factory) {
 		s := newStore(t)
 		wantErr(t, s.DeleteCollection(ctx, calRef("alice", "nope")), store.ErrNotFound)
 	})
+}
+
+// testAccess checks that a plain store grants full access to every collection
+// it returns. Only a store that acts for a caller other than the owner reports
+// less; see [WithAccess].
+func testAccess(t *testing.T, newStore Factory) {
+	s := newStore(t)
+	ref := calRef("alice", "personal")
+	created := mustCreate(t, s, ref)
+	name := "Renamed"
+	updated, err := s.UpdateCollection(ctx, ref, store.PropsUpdate{DisplayName: &name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err := s.ListCollections(ctx, "alice", store.KindCalendar)
+	if err != nil || len(listed) != 1 {
+		t.Fatalf("ListCollections: %d collections, %v", len(listed), err)
+	}
+	for what, c := range map[string]store.Collection{"created": created, "got": mustGet(t, s, ref), "updated": updated, "listed": listed[0]} {
+		if c.Access != store.AccessFull {
+			t.Errorf("%s collection reports %v, want AccessFull", what, c.Access)
+		}
+	}
 }
 
 func testObjects(t *testing.T, newStore Factory) {

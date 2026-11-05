@@ -47,7 +47,21 @@
 // so a sync token built from the ID and a revision cannot be confused with one from
 // a deleted and recreated collection of the same name.
 //
+// # Access levels
+//
+// Every Collection carries an [Access] level that says what the caller may do
+// with it: everything ([AccessFull]), read and write objects but leave the
+// collection itself alone ([AccessObjects]), or only read ([AccessRead]). A
+// store that lets one person reach another's collection, under whatever rules
+// the embedding program has, reports the caller's level there and answers a
+// write the level does not allow with [ErrPermission]. The protocol engines
+// show the level to clients as their privileges and turn ErrPermission into a
+// 403. The stores in this module serve every collection to its owner and always
+// grant AccessFull, which is the zero value.
+//
 // # Testing a store
 //
 // The storetest package holds a conformance suite. Every implementation passes it.
+// It also has a wrapper that fixes the access level of a store, for testing
+// programs that handle the levels.
 package store
