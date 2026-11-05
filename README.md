@@ -137,7 +137,7 @@ how to point desktop and phone clients at it and has more `curl` examples.
 | `store/filestore` | A store that keeps plain files in one directory |
 | `store/storetest` | A conformance suite that any `store.Store` can run |
 | `vcard` | vCard validation and `addressbook-query` matching |
-| `ical` | iCalendar validation, recurrence expansion, time zones and `calendar-query` matching |
+| `ical` | iCalendar parsing, encoding, validation, recurrence expansion, time zones and `calendar-query` matching |
 | `caldav`, `carddav` | The protocol handlers, for programs that want only one of them or their own discovery |
 
 The packages under `internal/` are not importable.
@@ -150,7 +150,7 @@ The packages under `internal/` are not importable.
   recovery and operations.
 - [docs/clients.md](docs/clients.md): connecting clients, and `curl` examples.
 - [docs/ical.md](docs/ical.md): what the iCalendar package accepts, how it
-  reads times and time zones, and its limits.
+  writes it back, how it reads times and time zones, and its limits.
 
 ## Client compatibility
 
