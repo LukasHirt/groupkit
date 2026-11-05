@@ -165,3 +165,30 @@ jobs:
             sleep 0.2
           done
           "$RUNNER_TEMP/venv/bin/python" -I test/pyclient/accept.py
+
+  evolution:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Build the example server
+        run: go build -o "$RUNNER_TEMP/server" ./examples/server
+      - name: Build the Evolution data server image
+        run: docker build -t groupkit-evolution test/evolution
+      - name: Run Evolution's data server against the example server
+        env:
+          GROUPKIT_PASSWORD: ci-check-password-1
+        run: |
+          "$RUNNER_TEMP/server" -addr 127.0.0.1:8080 -data "$RUNNER_TEMP/data" &
+          server=$!
+          trap 'kill $server' EXIT
+          for _ in $(seq 1 50); do
+            curl -s -o /dev/null http://127.0.0.1:8080/ && break
+            sleep 0.2
+          done
+          docker run --rm --network host \
+            -e GROUPKIT_PASSWORD -e GROUPKIT_URL=http://127.0.0.1:8080/dav/ \
+            -v "$PWD/test/evolution/check.py:/check.py:ro" \
+            groupkit-evolution dbus-run-session -- python3 -I /check.py
