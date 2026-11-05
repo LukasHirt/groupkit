@@ -41,6 +41,24 @@ VTIMEZONE. The same rule applies to VALUE parameters and RRULE text.
 `Parse` checks the structure only. It does not check the rules in the
 table, apart from the first row.
 
+## Encoding
+
+`Encode` on a `Calendar` or a `Component` writes it back as iCalendar text.
+Lines end in CRLF and are folded at 75 octets, and a fold never splits a
+UTF-8 character. Parameters come out in name order. A parameter value that
+holds a comma, a semicolon or a colon is quoted, and a double quote inside a
+parameter value is dropped, since the syntax has no way to write one.
+
+Parsing the output of `Encode` gives the same tree. Names are already upper
+case after `Parse`, repeated parameters have been merged into one, and the
+fold points of the input are forgotten, so the text can differ from the
+input while the tree is the same. Input that is already in this form, with
+CRLF endings, parameters in name order and no line over 75 octets, comes out
+byte for byte.
+
+`Encode` does not check anything. A component built by hand has to keep to
+the syntax: names must be tokens, and a value must not contain a line break.
+
 ## Time zones
 
 A `Resolver` turns DATE and DATE-TIME values into instants. It looks up a
