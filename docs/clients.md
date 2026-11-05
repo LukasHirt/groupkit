@@ -57,10 +57,13 @@ step. It also writes an event with a weekly recurrence and a contact on the serv
 checks that a refresh brings them in and that a delete on the server is picked up. The
 account dialogs of the Evolution application were not exercised.
 
-DAVx5 has not been run against the server. Its requests are standard and the server is
-expected to work with it, but that is not verified. What the DAVx5 section below says
-describes what to enter and what the server is built to answer. It is not a record of a
-tested setup.
+Also verified, by the `DAVx5` workflow (`test/davx5/check.py`): DAVx5 4.5.21 in an Android
+14 emulator. The script logs in through DAVx5's own `caldav://` link and checks, through
+the Calendar and Contacts content providers, that an event and a contact move in both
+directions and that deletes travel both ways for events. This one is best effort. It runs
+nightly and on demand, it is not a required check, and a failure can come from the
+emulator or from a changed DAVx5 screen instead of from the server. See
+`test/davx5/README.md`. A real phone and the Google Play build were not tried.
 
 ## Start the example server
 
@@ -131,7 +134,8 @@ shows attendees as plain data. Reminders (task lists) cannot be created.
 
 ### DAVx5
 
-Not yet verified. Add an account with "Login with URL and user name". Enter the
+The emulator check described above covers this setup, using the login-with-URL form
+that the link pre-fills. Add an account with "Login with URL and user name". Enter the
 base URL `https://dav.example.com/dav/`, the user name and the password. DAVx5
 then lists the address books and calendars it finds, and you choose which to
 sync. A calendar that was created with other component types besides events

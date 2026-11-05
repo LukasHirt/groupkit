@@ -1,0 +1,68 @@
+# SPDX-FileCopyrightText: 2026 groupkit contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# DAVx5 in an Android emulator against the example server. This is best
+# effort: it is a UI test on an emulator, it can fail for reasons that have
+# nothing to do with the server (a slow boot, a changed screen), and it is not
+# a required check. It runs nightly, on demand, and when its own files change.
+
+name: DAVx5
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/davx5.yml
+      - test/davx5/**
+
+permissions:
+  contents: read
+
+env:
+  # F-Droid's build of DAVx5 4.5.21. The checksum pins the file.
+  DAVX5_URL: https://f-droid.org/repo/at.bitfire.davdroid_405210002.apk
+  DAVX5_SHA256: 41cf9832d97c31e3fc694e5c66b38990dec3312936cc336141714db07259081b
+
+jobs:
+  davx5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Build the example server
+        run: go build -o "$RUNNER_TEMP/server" ./examples/server
+      - name: Download DAVx5
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/davx5.apk" "$DAVX5_URL"
+          echo "$DAVX5_SHA256  $RUNNER_TEMP/davx5.apk" | sha256sum -c -
+      - name: Enable hardware acceleration for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run DAVx5 against the example server
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        env:
+          SERVER: ${{ runner.temp }}/server
+          DAVX5_APK: ${{ runner.temp }}/davx5.apk
+          OUT_DIR: ${{ runner.temp }}/davx5-out
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: sh test/davx5/run.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: davx5-output
+          path: ${{ runner.temp }}/davx5-out
+          if-no-files-found: ignore
