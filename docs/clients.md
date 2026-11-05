@@ -48,10 +48,18 @@ matching request, and Thunderbird showed each change once. In Calendar the calen
 syncs, and creating an event and editing an event both work. Nothing about Apple was
 scripted, so it is not part of CI.
 
-None of the following has been run against the server. Their requests are
-standard and the server is expected to work with them, but that is not
-verified: DAVx5 and Evolution. Everything below about those clients describes
-what to enter and what the server is built to answer. It is not a record of a
+Also verified, by the `evolution` job in CI (`test/evolution/check.py`): Evolution
+data server 3.56 from Debian 13, run headless in a container. It is the code Evolution
+uses for its calendars and address books, driven from Python without the desktop
+application. The script adds a CalDAV calendar and a CardDAV address book, then creates,
+edits and deletes an event and a contact and checks what the server holds after each
+step. It also writes an event with a weekly recurrence and a contact on the server and
+checks that a refresh brings them in and that a delete on the server is picked up. The
+account dialogs of the Evolution application were not exercised.
+
+DAVx5 has not been run against the server. Its requests are standard and the server is
+expected to work with it, but that is not verified. What the DAVx5 section below says
+describes what to enter and what the server is built to answer. It is not a record of a
 tested setup.
 
 ## Start the example server
@@ -131,7 +139,8 @@ advertises events only.
 
 ### Evolution
 
-Not yet verified. For a calendar, add a new calendar of the type CalDAV, enter
+The data server behind Evolution is checked in CI (see above). Adding the accounts
+through the application's dialogs is not. For a calendar, add a new calendar of the type CalDAV, enter
 the URL `https://dav.example.com/dav/calendars/demo/personal/` and the user name.
 For contacts, add a new address book of the type CardDAV and enter
 `https://dav.example.com/dav/addressbooks/demo/contacts/`.
