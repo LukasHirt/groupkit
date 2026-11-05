@@ -71,6 +71,46 @@ type PropsUpdate struct {
 	Components *[]string
 }
 
+// Access is what the caller may do with a collection. A store that serves a
+// collection on behalf of someone other than its owner reports the caller's
+// level and refuses writes beyond it with [ErrPermission]. The stores in this
+// module know nothing about callers and always grant [AccessFull].
+type Access int
+
+const (
+	// AccessFull lets the caller read and write objects, change the
+	// collection's properties and delete the collection. It is the zero
+	// value, so a Collection whose Access was never set grants everything.
+	AccessFull Access = iota
+	// AccessObjects lets the caller read and write objects. The collection's
+	// properties cannot be changed and the collection cannot be deleted.
+	AccessObjects
+	// AccessRead lets the caller read objects and properties, and nothing else.
+	AccessRead
+)
+
+// AllowsObjectWrites reports whether the level permits creating, replacing
+// and deleting objects. An unknown level permits nothing.
+func (a Access) AllowsObjectWrites() bool { return a == AccessFull || a == AccessObjects }
+
+// AllowsPropertyWrites reports whether the level permits changing the
+// collection's properties and deleting the collection. An unknown level
+// permits nothing.
+func (a Access) AllowsPropertyWrites() bool { return a == AccessFull }
+
+// String returns "full", "objects" or "read".
+func (a Access) String() string {
+	switch a {
+	case AccessFull:
+		return "full"
+	case AccessObjects:
+		return "objects"
+	case AccessRead:
+		return "read"
+	}
+	return fmt.Sprintf("access(%d)", int(a))
+}
+
 // Collection is a collection and its current state.
 type Collection struct {
 	// Ref addresses the collection.
@@ -84,6 +124,8 @@ type Collection struct {
 	Revision uint64
 	// Created is when the collection was created.
 	Created time.Time
+	// Access is what the caller may do with the collection. See [Access].
+	Access Access
 }
 
 // Object is a calendar or contact object.

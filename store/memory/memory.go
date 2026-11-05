@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package memory is an in-memory [store.Store] for tests and examples. Nothing
-// survives the process.
+// survives the process. Every collection is served to its owner with
+// [store.AccessFull].
 package memory
 
 import (

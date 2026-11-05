@@ -71,6 +71,43 @@ func TestETag(t *testing.T) {
 	}
 }
 
+func TestAccessLevels(t *testing.T) {
+	// The zero value is full access, so a store that knows nothing about
+	// callers grants everything without setting the field.
+	var zero Access
+	if zero != AccessFull {
+		t.Errorf("zero Access = %v, want AccessFull", zero)
+	}
+	cases := []struct {
+		level          Access
+		objects, props bool
+		name           string
+	}{
+		{AccessFull, true, true, "full"},
+		{AccessObjects, true, false, "objects"},
+		{AccessRead, false, false, "read"},
+	}
+	for _, c := range cases {
+		if got := c.level.AllowsObjectWrites(); got != c.objects {
+			t.Errorf("%v.AllowsObjectWrites() = %v, want %v", c.level, got, c.objects)
+		}
+		if got := c.level.AllowsPropertyWrites(); got != c.props {
+			t.Errorf("%v.AllowsPropertyWrites() = %v, want %v", c.level, got, c.props)
+		}
+		if got := c.level.String(); got != c.name {
+			t.Errorf("%d.String() = %q, want %q", int(c.level), got, c.name)
+		}
+	}
+	// An unknown level is treated as the most restrictive one and prints its number.
+	odd := Access(42)
+	if odd.AllowsObjectWrites() || odd.AllowsPropertyWrites() {
+		t.Error("an unknown level allows writes")
+	}
+	if got := odd.String(); got != "access(42)" {
+		t.Errorf("Access(42).String() = %q", got)
+	}
+}
+
 func TestConflictErrorUnwraps(t *testing.T) {
 	err := error(&ConflictError{UID: "u1", Name: "other.ics"})
 	if !errors.Is(err, ErrUIDConflict) {
