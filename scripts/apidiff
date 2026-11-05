@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 groupkit contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Compares the exported API of the working tree with the latest release and
+# lists the incompatible changes.
+#
+# Usage: scripts/apidiff [--strict] [vX.Y.Z]
+#
+# Without a version the script uses the highest release tag (pre-releases are
+# skipped). Without --strict it always exits 0 and only reports. With --strict
+# it exits 1 when an incompatible change is found. Run it from a clone that
+# has the tags.
+
+set -euo pipefail
+
+# Pinned to a release of golang.org/x/exp that is at least two weeks old.
+apidiff_version="v0.0.0-20261014143641-f0251eb4aa3e"
+
+strict=false
+base=""
+for arg in "$@"; do
+  case "$arg" in
+    --strict) strict=true ;;
+    -h | --help)
+      sed -n '8,14p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    v*) base="$arg" ;;
+    *)
+      echo "error: unknown argument $arg" >&2
+      exit 2
+      ;;
+  esac
+done
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+module=$(go list -m)
+
+if [ -z "$base" ]; then
+  base=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -v -- '-' | head -n 1 || true)
+fi
+if [ -z "$base" ]; then
+  echo "No release tag found. There is nothing to compare against."
+  exit 0
+fi
+echo "Comparing the API of $module with $base"
+
+work=$(mktemp -d)
+trap 'git worktree remove --force "$work/old" >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
+git worktree add --detach "$work/old" "$base" >/dev/null
+(cd "$work/old" && go run "golang.org/x/exp/cmd/apidiff@$apidiff_version" -m -w "$work/old.api" "$module")
+
+report=$(go run "golang.org/x/exp/cmd/apidiff@$apidiff_version" -m -incompatible "$work/old.api" "$module")
+if [ -z "$report" ]; then
+  echo "No incompatible changes."
+  exit 0
+fi
+
+echo "Incompatible changes since $base:"
+echo "$report"
+if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+  {
+    echo "### Incompatible API changes since $base"
+    echo
+    echo '```'
+    echo "$report"
+    echo '```'
+  } >>"$GITHUB_STEP_SUMMARY"
+fi
+if $strict; then
+  exit 1
+fi
+echo "::warning title=Incompatible API change::The exported API differs from $base in ways that break callers. See the log."

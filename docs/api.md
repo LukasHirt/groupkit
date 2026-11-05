@@ -65,6 +65,10 @@ add `/v2`.
 A release is a signed tag with release notes. [CONTRIBUTING.md](../CONTRIBUTING.md)
 describes how one is made.
 
+Every pull request is compared with the latest release using `apidiff`, which
+lists incompatible changes to the exported API. The check is described under
+"API check" in [CONTRIBUTING.md](../CONTRIBUTING.md).
+
 Deprecated identifiers stay for the whole major version. Their documentation
 starts a paragraph with `Deprecated:` and names the replacement.
 
