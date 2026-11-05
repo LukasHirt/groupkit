@@ -109,10 +109,33 @@ Every PR is automatically checked for:
 - DCO sign-off on every commit (the [DCO app](https://probot.github.io/apps/dco/))
 - Every commit is signed (GPG/SSH) — enforced by branch protection
 - The PR title and each commit message follow Conventional Commits
+- The exported API against the latest release (the `api-check` job, see below)
 
 Run `task check` locally to catch the build/lint/test issues before pushing;
 the rest (signing, DCO, message format) you get right by following the
 sections above.
+
+### API check
+
+The `api-check` job runs `scripts/apidiff`, which compares the exported API of
+the branch with the highest release tag using
+[apidiff](https://pkg.go.dev/golang.org/x/exp/cmd/apidiff) and lists the
+incompatible changes: removed or changed identifiers, and the like. Run it
+locally with `scripts/apidiff` from a clone that has the tags, or give it a tag
+to compare against (`scripts/apidiff v0.1.1`). Pre-releases are skipped when it
+picks the tag.
+
+Until 1.0.0 the job only reports: a finding shows as a warning and in the job
+summary and does not fail the check. An incompatible change is meant to be
+rare once the API is promised (see [docs/api.md](docs/api.md)), and it needs a
+new major version.
+
+To make the check required:
+
+1. In `.github/workflows/ci.yml`, delete the line `continue-on-error: true`
+   from the `api-check` job, or pass `--strict` to the script in its step.
+2. In the branch protection rules for `main`, add `api-check` to the required
+   status checks.
 
 ## Code style
 
