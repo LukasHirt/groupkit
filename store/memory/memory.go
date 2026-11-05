@@ -62,26 +62,28 @@ type record struct {
 }
 
 // Option configures a Store.
-type Option func(*Store)
+type Option func(*options)
+
+type options struct{ maxJournal int }
 
 // WithMaxJournal sets how many object changes each collection's journal keeps.
 // Older revisions then report store.ErrChangesUnavailable. Values below 1 are
 // ignored.
 func WithMaxJournal(n int) Option {
-	return func(s *Store) {
+	return func(o *options) {
 		if n >= 1 {
-			s.maxJournal = n
+			o.maxJournal = n
 		}
 	}
 }
 
 // New returns an empty store.
 func New(opts ...Option) *Store {
-	s := &Store{maxJournal: DefaultMaxJournal, collections: map[key]*collection{}}
+	o := options{maxJournal: DefaultMaxJournal}
 	for _, opt := range opts {
-		opt(s)
+		opt(&o)
 	}
-	return s
+	return &Store{maxJournal: o.maxJournal, collections: map[key]*collection{}}
 }
 
 func refKey(ref store.CollectionRef) key {

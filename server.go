@@ -45,7 +45,8 @@
 // ErrForbidden and ErrUserNotFound. Call EnsureDefaultCollections when you
 // provision a user so clients find an address book and a calendar.
 //
-// The API is not stable yet.
+// The exported API is covered by a compatibility promise, described in
+// docs/api.md in the repository.
 package groupkit
 
 import (
