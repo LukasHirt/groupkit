@@ -314,6 +314,8 @@ func StoreError(err error) *Error {
 		return BadRequest("invalid name")
 	case errors.Is(err, store.ErrChangesUnavailable):
 		return Forbidden(ValidSyncToken)
+	case errors.Is(err, store.ErrPermission):
+		return Forbidden(NeedPrivileges)
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return &Error{Status: http.StatusServiceUnavailable, Message: "request cancelled"}
 	}

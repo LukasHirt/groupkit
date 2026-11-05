@@ -219,6 +219,7 @@ func TestStoreError(t *testing.T) {
 		{"uid", store.ErrUIDConflict, 409, "", "uid conflict"},
 		{"name", fmt.Errorf("x: %w", store.ErrInvalidName), 400, "", "invalid name"},
 		{"changes", store.ErrChangesUnavailable, 403, "valid-sync-token", ""},
+		{"permission", fmt.Errorf("x: %w", store.ErrPermission), 403, "need-privileges", ""},
 		{"canceled", fmt.Errorf("x: %w", context.Canceled), 503, "", "request cancelled"},
 		{"deadline", context.DeadlineExceeded, 503, "", "request cancelled"},
 		{"other", errors.New("secret detail"), 500, "", "internal error"},

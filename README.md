@@ -35,7 +35,10 @@ Status: pre-1.0. The API will change.
 - Tasks. Only events (`VEVENT`) are stored; a task (`VTODO`) is refused, and a
   task list cannot be created.
 - Scheduling and invitations. Attendees are kept as data and nothing is sent.
-- Sharing and access control lists.
+- Sharing and access control lists. A store can say how much a caller may do
+  with a collection, and the server shows that as privileges and refuses
+  writes beyond it, but nothing in the library grants one user another's
+  data. See [docs/server.md](docs/server.md).
 - `MOVE`, `COPY`, `LOCK` and `UNLOCK`.
 - JMAP.
 - Authentication. The library asks two functions you supply who is calling

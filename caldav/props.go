@@ -41,13 +41,32 @@ func advertisedComponents(stored []string) []string {
 	return out
 }
 
-// Privileges granted per kind of resource. The engine does no per-object
-// access control, so these describe what the endpoint supports.
-var (
-	homePrivileges     = []xml.Name{dav.Read, dav.Bind}
-	calendarPrivileges = []xml.Name{dav.Read, dav.Write, dav.WriteProperties, dav.WriteContent, dav.Bind, dav.Unbind}
-	objectPrivileges   = []xml.Name{dav.Read, dav.Write, dav.WriteContent}
-)
+// homePrivileges are the privileges on a calendar home, which is always the
+// caller's own.
+var homePrivileges = []xml.Name{dav.Read, dav.Bind}
+
+// calendarPrivileges are the privileges on a calendar at an access level:
+// everything at full access, object writes (write-content, bind, unbind)
+// without write-properties when only objects may be written, and read alone
+// otherwise. The engine does no per-object access control.
+func calendarPrivileges(a store.Access) []xml.Name {
+	switch {
+	case a.AllowsPropertyWrites():
+		return []xml.Name{dav.Read, dav.Write, dav.WriteProperties, dav.WriteContent, dav.Bind, dav.Unbind}
+	case a.AllowsObjectWrites():
+		return []xml.Name{dav.Read, dav.WriteContent, dav.Bind, dav.Unbind}
+	}
+	return []xml.Name{dav.Read}
+}
+
+// objectPrivileges are the privileges on an object of a calendar at an
+// access level.
+func objectPrivileges(a store.Access) []xml.Name {
+	if a.AllowsObjectWrites() {
+		return []xml.Name{dav.Read, dav.Write, dav.WriteContent}
+	}
+	return []xml.Name{dav.Read}
+}
 
 // calendarReports are the reports a calendar supports.
 var calendarReports = []xml.Name{dav.CalendarQuery, dav.CalendarMultiget, dav.SyncCollection}
@@ -138,9 +157,9 @@ func (h *Handler) homeResource(user string) dav.Resource {
 // when asked for while unset, the others are then not found. The order is
 // different: store.Props.Order cannot tell 0 from unset, so it is always
 // answered when asked for (0 included) and listed by allprop only when it is
-// not 0.
+// not 0. The privileges follow the collection's access level.
 func (h *Handler) calendarResource(user string, c store.Collection) dav.Resource {
-	props := h.commonProps(user, calendarPrivileges, calendarReports, dav.Collection, dav.Calendar)
+	props := h.commonProps(user, calendarPrivileges(c.Access), calendarReports, dav.Collection, dav.Calendar)
 	name := c.Props.DisplayName
 	if name == "" {
 		name = c.Ref.Name
@@ -174,11 +193,12 @@ func (h *Handler) calendarResource(user string, c store.Collection) dav.Resource
 	return dav.Resource{Href: h.calendarHref(user, c.Ref.Name), Props: props}
 }
 
-// objectResource describes a calendar object from its listing entry. data
-// fetches the object's bytes; it is only called when calendar-data is asked
-// for by name, so a listing reads no object data.
-func (h *Handler) objectResource(user, calendar string, o store.Object, data func() ([]byte, error)) dav.Resource {
-	props := h.commonProps(user, objectPrivileges, nil)
+// objectResource describes a calendar object from its listing entry. access
+// is the level of its calendar. data fetches the object's bytes; it is only
+// called when calendar-data is asked for by name, so a listing reads no
+// object data.
+func (h *Handler) objectResource(user, calendar string, access store.Access, o store.Object, data func() ([]byte, error)) dav.Resource {
+	props := h.commonProps(user, objectPrivileges(access), nil)
 	props[dav.DisplayName] = text(dav.DisplayName, o.Name)
 	props[dav.GetETag] = text(dav.GetETag, dav.QuoteETag(o.ETag))
 	props[dav.GetContentType] = text(dav.GetContentType, icalContentType)
@@ -197,12 +217,12 @@ func (h *Handler) objectResource(user, calendar string, o store.Object, data fun
 	return dav.Resource{Href: h.objectHref(user, calendar, o.Name), Props: props}
 }
 
-// objectResponse builds the PROPFIND response for one object of a calendar.
-// The object's data is read from the store only if the request names
-// calendar-data.
-func (h *Handler) objectResponse(ctx context.Context, owner, user, calendar string, o store.Object, req dav.PropfindRequest) dav.Response {
+// objectResponse builds the PROPFIND response for one object of a calendar
+// at the given access level. The object's data is read from the store only
+// if the request names calendar-data.
+func (h *Handler) objectResponse(ctx context.Context, owner, user, calendar string, access store.Access, o store.Object, req dav.PropfindRequest) dav.Response {
 	ref := store.CollectionRef{Owner: owner, Kind: store.KindCalendar, Name: calendar}
-	res := h.objectResource(user, calendar, o, func() ([]byte, error) {
+	res := h.objectResource(user, calendar, access, o, func() ([]byte, error) {
 		full, err := h.store.GetObject(ctx, ref, o.Name)
 		if err != nil {
 			h.log.Warn("cannot read object", "collection", calendar, "error", err)

@@ -78,12 +78,18 @@ func (h *Handler) currentState(ctx context.Context, ref store.CollectionRef, nam
 	return "", false, nil
 }
 
-// putObject creates or replaces an object.
+// putObject creates or replaces an object. A caller whose access level does
+// not allow object writes is refused before the body is read.
 func (h *Handler) putObject(w http.ResponseWriter, r *http.Request, t target, owner string) {
 	ctx := r.Context()
 	ref := h.bookRef(owner, t.book)
-	if _, err := h.store.GetCollection(ctx, ref); err != nil {
+	c, err := h.store.GetCollection(ctx, ref)
+	if err != nil {
 		h.fail(w, r, t, err)
+		return
+	}
+	if !c.Access.AllowsObjectWrites() {
+		dav.WriteError(w, dav.Forbidden(dav.NeedPrivileges))
 		return
 	}
 

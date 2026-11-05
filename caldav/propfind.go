@@ -101,7 +101,7 @@ func (h *Handler) calendarResponses(r *http.Request, t target, owner string, req
 			return
 		}
 		for _, o := range objs {
-			if r.Context().Err() != nil || !yield(h.objectResponse(r.Context(), owner, t.user, t.calendar, o, req)) {
+			if r.Context().Err() != nil || !yield(h.objectResponse(r.Context(), owner, t.user, t.calendar, c.Access, o, req)) {
 				return
 			}
 		}
@@ -109,12 +109,18 @@ func (h *Handler) calendarResponses(r *http.Request, t target, owner string, req
 }
 
 func (h *Handler) objectResponses(r *http.Request, t target, owner string, req dav.PropfindRequest) (iter.Seq[dav.Response], error) {
+	// The calendar is read for its access level, which sets the privileges.
+	ref := h.calendarRef(owner, t.calendar)
+	c, err := h.store.GetCollection(r.Context(), ref)
+	if err != nil {
+		return nil, err
+	}
 	// One object is read whole; its bytes serve calendar-data too.
-	o, err := h.store.GetObject(r.Context(), h.calendarRef(owner, t.calendar), t.name)
+	o, err := h.store.GetObject(r.Context(), ref, t.name)
 	if err != nil {
 		return nil, err
 	}
 	data := o.Data
-	res := h.objectResource(t.user, t.calendar, o, func() ([]byte, error) { return data, nil })
+	res := h.objectResource(t.user, t.calendar, c.Access, o, func() ([]byte, error) { return data, nil })
 	return func(yield func(dav.Response) bool) { yield(dav.PropFind(req, res)) }, nil
 }

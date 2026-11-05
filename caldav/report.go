@@ -42,18 +42,20 @@ func (h *Handler) report(w http.ResponseWriter, r *http.Request, t target, owner
 		dav.WriteErr(w, dav.BadRequest("malformed XML"))
 		return
 	}
-	// The calendar must exist whatever the report.
-	if _, err := h.store.GetCollection(r.Context(), h.calendarRef(owner, t.calendar)); err != nil {
+	// The calendar must exist whatever the report, and its access level sets
+	// the privileges of the objects reported.
+	c, err := h.store.GetCollection(r.Context(), h.calendarRef(owner, t.calendar))
+	if err != nil {
 		h.fail(w, r, t, err)
 		return
 	}
 	switch root.Name {
 	case dav.CalendarQuery:
-		h.query(w, r, t, owner, root)
+		h.query(w, r, t, owner, c.Access, root)
 	case dav.CalendarMultiget:
-		h.multiget(w, r, t, owner, root)
+		h.multiget(w, r, t, owner, c.Access, root)
 	case dav.SyncCollection:
-		h.syncCollection(w, r, t, owner, root)
+		h.syncCollection(w, r, t, owner, c.Access, root)
 	default:
 		dav.WriteError(w, dav.Forbidden(dav.SupportedReport))
 	}
@@ -88,7 +90,7 @@ func propRequestFromNode(root *dav.Node) (dav.PropfindRequest, error) {
 // query answers a calendar-query report (RFC 4791 section 7.8). Objects are
 // read and matched while the response streams, one at a time; one that
 // cannot be read or parsed is skipped.
-func (h *Handler) query(w http.ResponseWriter, r *http.Request, t target, owner string, root *dav.Node) {
+func (h *Handler) query(w http.ResponseWriter, r *http.Request, t target, owner string, access store.Access, root *dav.Node) {
 	var flt *ical.CompFilter
 	if fn := root.Child(dav.CalFilter); fn != nil {
 		f, err := parseCompFilter(fn)
@@ -153,7 +155,7 @@ func (h *Handler) query(w http.ResponseWriter, r *http.Request, t target, owner 
 				}
 			}
 		}
-		res := h.objectResource(t.user, t.calendar, o, func() ([]byte, error) { return data, nil })
+		res := h.objectResource(t.user, t.calendar, access, o, func() ([]byte, error) { return data, nil })
 		return dav.PropFind(req, res), true
 	}
 
@@ -215,7 +217,7 @@ func errKind(err error) string {
 // multiget answers a calendar-multiget report (RFC 4791 section 7.9). Only
 // hrefs inside the requested calendar of the requested user are read; any
 // other href is a 404 response and never reaches the store.
-func (h *Handler) multiget(w http.ResponseWriter, r *http.Request, t target, owner string, root *dav.Node) {
+func (h *Handler) multiget(w http.ResponseWriter, r *http.Request, t target, owner string, access store.Access, root *dav.Node) {
 	hrefs := root.Kids(dav.Href)
 	if len(hrefs) > maxMultigetHrefs {
 		dav.WriteErr(w, dav.BadRequest("too many hrefs"))
@@ -264,7 +266,7 @@ func (h *Handler) multiget(w http.ResponseWriter, r *http.Request, t target, own
 				}
 			default:
 				data := o.Data
-				res := h.objectResource(t.user, t.calendar, o, func() ([]byte, error) { return data, nil })
+				res := h.objectResource(t.user, t.calendar, access, o, func() ([]byte, error) { return data, nil })
 				if !yield(dav.PropFind(req, res)) {
 					return
 				}
