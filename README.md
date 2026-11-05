@@ -139,7 +139,7 @@ how to point desktop and phone clients at it and has more `curl` examples.
 | `store/memory` | An in-memory store |
 | `store/filestore` | A store that keeps plain files in one directory |
 | `store/storetest` | A conformance suite that any `store.Store` can run, and a wrapper that fixes the access level of a store for tests |
-| `vcard` | vCard validation and `addressbook-query` matching |
+| `vcard` | vCard validation, splitting a file into cards and `addressbook-query` matching |
 | `ical` | iCalendar parsing, encoding, validation, splitting a file into objects, recurrence expansion, time zones and `calendar-query` matching |
 | `caldav`, `carddav` | The protocol handlers, for programs that want only one of them or their own discovery |
 
