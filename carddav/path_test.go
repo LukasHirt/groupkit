@@ -126,3 +126,54 @@ func FuzzParsePath(f *testing.F) {
 		}
 	})
 }
+
+func TestParsePathUsersSegment(t *testing.T) {
+	h, err := New(Config{Store: panicStore{}, Prefix: "/dav", Resolve: resolveAs("o"), UsersSegment: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		path   string
+		want   target
+		status int
+	}{
+		{"/dav/addressbooks/users/alice/", target{kind: kindHome, user: "alice"}, 0},
+		{"/dav/addressbooks/users/alice/contacts/", target{kind: kindCollection, user: "alice", book: "contacts"}, 0},
+		{"/dav/addressbooks/users/alice/contacts/a.vcf", target{kind: kindObject, user: "alice", book: "contacts", name: "a.vcf"}, 0},
+		{"/dav/addressbooks/users/", target{}, 404},
+		{"/dav/addressbooks/users", target{}, 404},
+		{"/dav/addressbooks/alice/", target{}, 404},
+		{"/dav/addressbooks/alice/contacts/", target{}, 404},
+		{"/dav/addressbooks/usersx/alice/", target{}, 404},
+		{"/dav/addressbooks/users/alice/contacts/a.vcf/more", target{}, 404},
+		{"/dav/addressbooks/users//contacts/", target{}, 400},
+	}
+	for _, tt := range tests {
+		got, perr := h.parsePath(tt.path)
+		if tt.status != 0 {
+			if perr == nil || perr.Status != tt.status {
+				t.Errorf("parsePath(%q) = %+v, %v; want status %d", tt.path, got, perr, tt.status)
+			}
+			continue
+		}
+		if perr != nil || got != tt.want {
+			t.Errorf("parsePath(%q) = %+v, %v; want %+v", tt.path, got, perr, tt.want)
+		}
+	}
+	if got := h.HomeHref("alice"); got != "/dav/addressbooks/users/alice/" {
+		t.Errorf("HomeHref = %q", got)
+	}
+	if got := h.principalHref("alice"); got != "/dav/principals/users/alice/" {
+		t.Errorf("principalHref = %q", got)
+	}
+	if got := h.objectHref("alice", "contacts", "a.vcf"); got != "/dav/addressbooks/users/alice/contacts/a.vcf" {
+		t.Errorf("objectHref = %q", got)
+	}
+	tgt := target{kind: kindCollection, user: "alice", book: "contacts"}
+	if name, ok := h.bookObjectName("/dav/addressbooks/users/alice/contacts/a.vcf", tgt); !ok || name != "a.vcf" {
+		t.Errorf("bookObjectName = %q %v", name, ok)
+	}
+	if _, ok := h.bookObjectName("/dav/addressbooks/alice/contacts/a.vcf", tgt); ok {
+		t.Error("bookObjectName accepted a flat href")
+	}
+}

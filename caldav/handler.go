@@ -39,6 +39,13 @@ type Config struct {
 	// under Prefix + "/calendars/".
 	Prefix string
 
+	// UsersSegment puts a "users" segment below the principal root, as some
+	// older servers lay it out: the principal of a user is
+	// Prefix + "/principals/users/{user}/" instead of
+	// Prefix + "/principals/{user}/". Calendars stay under
+	// Prefix + "/calendars/" either way. The default is false.
+	UsersSegment bool
+
 	// Resolve maps the user named in a URL (already percent-decoded) to the
 	// store owner, or refuses the request with an error wrapping one of the
 	// errors of package access. Any other error answers 500. It is called on
@@ -56,11 +63,14 @@ type Config struct {
 // Handler is an http.Handler for the calendars under a prefix. It is safe
 // for concurrent use.
 type Handler struct {
-	store   store.Store
-	prefix  string
-	resolve func(r *http.Request, urlUser string) (string, error)
-	maxSize int64
-	log     *slog.Logger
+	store  store.Store
+	prefix string
+	// principalsRoot is the escaped path the principals live under, with a
+	// trailing slash.
+	principalsRoot string
+	resolve        func(r *http.Request, urlUser string) (string, error)
+	maxSize        int64
+	log            *slog.Logger
 }
 
 // New checks cfg, applies defaults and returns a Handler. The Config is
@@ -79,11 +89,15 @@ func New(cfg Config) (*Handler, error) {
 		return nil, fmt.Errorf("caldav: Config.MaxObjectSize %d is negative", cfg.MaxObjectSize)
 	}
 	h := &Handler{
-		store:   cfg.Store,
-		prefix:  cfg.Prefix,
-		resolve: cfg.Resolve,
-		maxSize: cfg.MaxObjectSize,
-		log:     cfg.Logger,
+		store:          cfg.Store,
+		prefix:         cfg.Prefix,
+		principalsRoot: cfg.Prefix + "/principals/",
+		resolve:        cfg.Resolve,
+		maxSize:        cfg.MaxObjectSize,
+		log:            cfg.Logger,
+	}
+	if cfg.UsersSegment {
+		h.principalsRoot += "users/"
 	}
 	if h.maxSize == 0 {
 		h.maxSize = defaultMaxObjectSize

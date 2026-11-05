@@ -31,6 +31,14 @@ type Config struct {
 	// under Prefix + "/addressbooks/".
 	Prefix string
 
+	// UsersSegment puts a "users" segment below the principal and address
+	// book roots, as some older servers lay them out: address books live
+	// under Prefix + "/addressbooks/users/" and the principal of a user is
+	// Prefix + "/principals/users/{user}/". The default is false, which
+	// leaves both directly below Prefix + "/addressbooks/" and
+	// Prefix + "/principals/".
+	UsersSegment bool
+
 	// Resolve maps the user named in a URL (already percent-decoded) to the
 	// store owner, or refuses the request with an error wrapping one of the
 	// errors of package access. Any other error answers 500. It is called on
@@ -48,11 +56,13 @@ type Config struct {
 // Handler is an http.Handler for the address books under a prefix. It is safe
 // for concurrent use.
 type Handler struct {
-	store   store.Store
-	prefix  string
-	resolve func(r *http.Request, urlUser string) (string, error)
-	maxSize int64
-	log     *slog.Logger
+	store store.Store
+	// booksRoot and principalsRoot are the escaped paths the address book
+	// homes and the principals live under, with a trailing slash.
+	booksRoot, principalsRoot string
+	resolve                   func(r *http.Request, urlUser string) (string, error)
+	maxSize                   int64
+	log                       *slog.Logger
 }
 
 // New checks cfg, applies defaults and returns a Handler. The Config is
@@ -71,11 +81,16 @@ func New(cfg Config) (*Handler, error) {
 		return nil, fmt.Errorf("carddav: Config.MaxObjectSize %d is negative", cfg.MaxObjectSize)
 	}
 	h := &Handler{
-		store:   cfg.Store,
-		prefix:  cfg.Prefix,
-		resolve: cfg.Resolve,
-		maxSize: cfg.MaxObjectSize,
-		log:     cfg.Logger,
+		store:          cfg.Store,
+		booksRoot:      cfg.Prefix + "/addressbooks/",
+		principalsRoot: cfg.Prefix + "/principals/",
+		resolve:        cfg.Resolve,
+		maxSize:        cfg.MaxObjectSize,
+		log:            cfg.Logger,
+	}
+	if cfg.UsersSegment {
+		h.booksRoot += "users/"
+		h.principalsRoot += "users/"
 	}
 	if h.maxSize == 0 {
 		h.maxSize = defaultMaxObjectSize
@@ -87,9 +102,10 @@ func New(cfg Config) (*Handler, error) {
 }
 
 // HomeHref returns the escaped URL path of a user's address book home,
-// Prefix + "/addressbooks/" + user + "/".
+// Prefix + "/addressbooks/" + user + "/", or with "users/" before the user
+// when Config.UsersSegment is set.
 func (h *Handler) HomeHref(urlUser string) string {
-	return h.prefix + "/addressbooks/" + dav.EscapeHref(urlUser) + "/"
+	return h.booksRoot + dav.EscapeHref(urlUser) + "/"
 }
 
 // allowed returns the methods valid for a kind of target.

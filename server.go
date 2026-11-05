@@ -36,7 +36,9 @@
 //
 // Address books live under Prefix + "/addressbooks/" and calendars under
 // Prefix + "/calendars/". Config.DisableAddressBooks and
-// Config.DisableCalendars switch either protocol off.
+// Config.DisableCalendars switch either protocol off. Config.UsersSegment
+// moves principals and address book homes below a "users" segment, for
+// clients set up against a server with that layout.
 //
 // The server does not authenticate anyone. CurrentUser and Authorize report
 // who is asking and what they may reach, using the errors ErrUnauthenticated,
@@ -117,6 +119,16 @@ type Config struct {
 	// Disabling both protocols is an error.
 	DisableCalendars bool
 
+	// UsersSegment puts a "users" segment below the principal and address
+	// book roots, as some older servers lay them out: a principal is
+	// Prefix + "/principals/users/{user}/" and an address book home is
+	// Prefix + "/addressbooks/users/{user}/". Calendars stay under
+	// Prefix + "/calendars/{user}/". Every href the server sends follows
+	// the layout. The default is false, which keeps principals and address
+	// book homes directly below Prefix + "/principals/" and
+	// Prefix + "/addressbooks/".
+	UsersSegment bool
+
 	// Logger receives server faults and warnings. An entry has the request
 	// method or the collection name, the resource path or the object name
 	// where there is one, and the error. Collection and object names are
@@ -141,6 +153,9 @@ type Server struct {
 
 	store                          store.Store
 	disableBooks, disableCalendars bool
+	// principalsRoot is the escaped path the principals live under, with a
+	// trailing slash.
+	principalsRoot string
 
 	// mounts are the protocol handlers by first path segment.
 	mounts []mount
@@ -181,6 +196,10 @@ func NewServer(cfg Config) (*Server, error) {
 		log:              cfg.Logger,
 		disableBooks:     cfg.DisableAddressBooks,
 		disableCalendars: cfg.DisableCalendars,
+		principalsRoot:   cfg.Prefix + "/principals/",
+	}
+	if cfg.UsersSegment {
+		s.principalsRoot += "users/"
 	}
 	if s.log == nil {
 		s.log = slog.New(slog.DiscardHandler)
@@ -189,6 +208,7 @@ func NewServer(cfg Config) (*Server, error) {
 		cards, err := carddav.New(carddav.Config{
 			Store:         cfg.Store,
 			Prefix:        cfg.Prefix,
+			UsersSegment:  cfg.UsersSegment,
 			Resolve:       cfg.Authorize,
 			MaxObjectSize: cfg.MaxObjectSize,
 			Logger:        cfg.Logger,
@@ -207,6 +227,7 @@ func NewServer(cfg Config) (*Server, error) {
 		cals, err := caldav.New(caldav.Config{
 			Store:         cfg.Store,
 			Prefix:        cfg.Prefix,
+			UsersSegment:  cfg.UsersSegment,
 			Resolve:       cfg.Authorize,
 			MaxObjectSize: cfg.MaxObjectSize,
 			Logger:        cfg.Logger,
@@ -268,9 +289,8 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		notFound(w)
 		return
 	}
-	first, tail, _ := strings.Cut(rest[1:], "/")
-	if first == "principals" {
-		seg, extra, _ := strings.Cut(tail, "/")
+	if below, ok := strings.CutPrefix(path, s.principalsRoot); ok {
+		seg, extra, _ := strings.Cut(below, "/")
 		if seg == "" || extra != "" {
 			notFound(w)
 			return
@@ -278,6 +298,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		s.serveDiscovery(w, r, kindPrincipal, seg)
 		return
 	}
+	first, _, _ := strings.Cut(rest[1:], "/")
 	for _, m := range s.mounts {
 		if m.segment == first {
 			m.handler.ServeHTTP(w, r)

@@ -126,3 +126,20 @@ func FuzzParsePath(f *testing.F) {
 		}
 	})
 }
+
+func TestUsersSegmentMovesOnlyThePrincipal(t *testing.T) {
+	h, err := New(Config{Store: panicStore{}, Prefix: "/dav", Resolve: resolveAs("o"), UsersSegment: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, perr := h.parsePath("/dav/calendars/alice/work/")
+	if perr != nil || got != (target{kind: kindCollection, user: "alice", calendar: "work"}) {
+		t.Errorf("parsePath = %+v, %v", got, perr)
+	}
+	if got := h.HomeHref("alice"); got != "/dav/calendars/alice/" {
+		t.Errorf("HomeHref = %q", got)
+	}
+	if got := h.principalHref("alice"); got != "/dav/principals/users/alice/" {
+		t.Errorf("principalHref = %q", got)
+	}
+}

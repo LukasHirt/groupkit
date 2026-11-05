@@ -31,8 +31,7 @@ type target struct {
 // without the trailing slash is accepted, as some clients omit it.
 func (h *Handler) parsePath(p string) (target, *dav.Error) {
 	var t target
-	root := h.prefix + "/addressbooks/"
-	rest, ok := strings.CutPrefix(p, root)
+	rest, ok := strings.CutPrefix(p, h.booksRoot)
 	if !ok || rest == "" {
 		return t, dav.NotFound("not found")
 	}

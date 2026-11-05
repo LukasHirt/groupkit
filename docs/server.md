@@ -27,6 +27,7 @@ error. It copies the `Config`.
 | `MaxObjectSize` | The largest object a client may store, in bytes. Zero means the default given under Limits |
 | `DisableAddressBooks` | Turns CardDAV off |
 | `DisableCalendars` | Turns CalDAV off. Turning both off is an error |
+| `UsersSegment` | Puts a `users` segment below the principal and address book roots. See the URL layout |
 | `Logger` | An `*slog.Logger` for server faults. Nil discards them |
 
 <!-- claim: TestNewServerErrors -->
@@ -132,6 +133,32 @@ With the prefix `/dav`:
 
 A request for a collection works with or without the trailing slash. Links in
 responses always have it. `REPORT` on a home or a principal answers 405.
+
+<!-- claim: TestUsersSegmentPrincipalPaths -->
+<!-- claim: TestUsersSegmentAddressBooks -->
+<!-- claim: TestUsersSegmentCalendars -->
+`UsersSegment` changes where principals and address book homes live. Some
+older servers put a `users` segment below those two roots, and clients that
+were set up against such a server keep the URLs they learnt. With the option
+on, and the prefix `/dav`:
+
+| URL | What it is |
+|---|---|
+| `/dav/principals/users/{user}/` | The principal of a user |
+| `/dav/addressbooks/users/{user}/` | The user's address book home |
+| `/dav/addressbooks/users/{user}/{book}/` | An address book |
+| `/dav/addressbooks/users/{user}/{book}/{name}` | A contact |
+
+Calendars stay at `/dav/calendars/{user}/`, which is where those servers had
+them too. Every link the server sends follows the chosen layout: the
+`current-user-principal` of the root, the home sets of the principal, the
+`owner` of a collection, and the hrefs in multiget, query and sync
+responses. The other layout's paths answer 404. The option is off by default,
+so an existing deployment keeps its URLs.
+
+A program that serves both layouts, for example to keep old client
+configurations working next to the default ones, creates two servers over the
+same store with different prefixes and mounts each under its own prefix.
 
 Calendars are created with `MKCALENDAR`, or with an extended `MKCOL` whose
 `resourcetype` names `calendar`. Address books are created with an extended
