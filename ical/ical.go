@@ -119,7 +119,11 @@ func isMarker(l contentline.Line, name string) bool {
 // and END lines nest, that every component has a name and that no VCALENDAR
 // sits inside another; use Validate for the CalDAV rules.
 func Parse(data []byte) (*Calendar, error) {
-	lines, err := contentline.Parse(data, contentline.DefaultLimits)
+	return parse(data, contentline.DefaultLimits)
+}
+
+func parse(data []byte, limits contentline.Limits) (*Calendar, error) {
+	lines, err := contentline.Parse(data, limits)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}

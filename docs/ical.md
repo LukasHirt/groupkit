@@ -59,6 +59,32 @@ byte for byte.
 `Encode` does not check anything. A component built by hand has to keep to
 the syntax: names must be tokens, and a value must not contain a line break.
 
+## Splitting a file
+
+A calendar file exported by a client holds many events in one VCALENDAR,
+while a collection stores one object per UID. `Split(data)` cuts such a file
+into those objects, in the order the UIDs first appear in the file. Each
+`Object` has the UID and a `Calendar` to encode and store.
+
+- Components with the same UID go into one object, so a recurring master
+  and its overrides stay together.
+- Each object gets a copy of every VTIMEZONE whose TZID one of its
+  components refers to, in any property and at any depth, with white space
+  around the TZID ignored. When a file has several VTIMEZONEs with one TZID,
+  all of them are copied, in file order.
+- The file's top-level properties are copied to every object, except
+  METHOD, which a stored object must not carry.
+- A component without a UID becomes an object of its own, with an empty
+  UID. `Validate` refuses such an object, and so does one that mixes
+  component types under one UID.
+- Objects share no memory, so one can be changed without touching another.
+
+`Split` checks the structure as `Parse` does and returns `ErrInvalid` for
+the same input. It has no limit on the number of lines, since a file of
+thousands of events goes past the limit of `Parse`; the caller bounds the
+size of the file in bytes. The 16 MiB limit on one unfolded line still
+holds.
+
 ## Time zones
 
 A `Resolver` turns DATE and DATE-TIME values into instants. It looks up a
