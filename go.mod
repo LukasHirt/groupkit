@@ -5,7 +5,7 @@ go 1.26.10
 require (
 	github.com/emersion/go-vcard v0.1.0
 	github.com/teambition/rrule-go v1.8.2
-	golang.org/x/text v0.43.0
+	golang.org/x/text v0.44.0
 )
 
 require (
