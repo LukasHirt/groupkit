@@ -205,9 +205,9 @@ h11==0.16.0 \
     --hash=sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1 \
     --hash=sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86
     # via urllib3-future
-icalendar==7.3.0 \
-    --hash=sha256:7bd001c8e648205e1bde5c6a5b77096598e8d0893dcf57755c6c597635620132 \
-    --hash=sha256:8355acfe17be81b368f0b1e3740817cea9b56ea889931f8f1a87c62f2d28db0b
+icalendar==7.3.2 \
+    --hash=sha256:f15380927aed4318860e001c03b543c48578c73aec46e2d384c5d0802082b808 \
+    --hash=sha256:f95ce4ff8f41d8ad9ca253a676ef40c672abd3774458d197c215055a0d805cc4
     # via
     #   caldav
     #   icalendar-searcher
